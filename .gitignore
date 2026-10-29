@@ -1,0 +1,20 @@
+# Gradle e Kotlin
+.gradle/
+.kotlin/
+build/
+
+# Android Studio
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Configuração local e chaves (nunca versionar)
+local.properties
+*.jks
+*.keystore
+
+# Sistema operacional
+.DS_Store
+Thumbs.db

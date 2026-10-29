@@ -1,0 +1,15 @@
+# Quebras de linha padronizadas no repositório
+* text=auto eol=lf
+*.bat text eol=crlf
+gradlew text eol=lf
+
+# Arquivos binários
+*.jar binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.pdf binary
+*.ttf binary
+*.otf binary

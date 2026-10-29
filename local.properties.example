@@ -1,0 +1,20 @@
+# Copie este arquivo para local.properties e preencha os valores.
+# O local.properties fica fora do Git: as chaves nunca vão para o repositório.
+
+# Caminho do Android SDK
+sdk.dir=/caminho/para/Android/Sdk
+
+# SimplesAPI: consulta dos dados do veículo pela placa
+SIMPLES_API_KEY=cole_sua_chave_aqui
+
+# Google Maps e Places: mapa e busca de serviços próximos
+MAPS_API_KEY=cole_sua_chave_aqui
+
+# Login com a conta Google (Credential Manager)
+GOOGLE_WEB_CLIENT_ID=seu_client_id.apps.googleusercontent.com
+
+# EmailJS: envio do código de recuperação de senha
+EMAILJS_SERVICE_ID=
+EMAILJS_TEMPLATE_ID=
+EMAILJS_PUBLIC_KEY=
+EMAILJS_PRIVATE_KEY=
