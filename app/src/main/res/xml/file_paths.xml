@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- comprovantes (manutenção e abastecimento), com nome padronizado -->
+    <files-path name="comprovantes" path="comprovantes/" />
+    <!-- comprovantes antigos, de antes desta versão -->
+    <cache-path name="receipts" path="receipts/" />
+    <!-- relatórios em PDF -->
+    <external-files-path name="documentos" path="Documents/" />
+    <!-- relatórios em PDF, caso o armazenamento externo do app não esteja disponível -->
+    <files-path name="relatorios" path="relatorios/" />
+    <external-cache-path name="ext_receipts" path="receipts/" />
+</paths>
