@@ -55,7 +55,7 @@ O pacote `domain` não importa nenhuma classe do Android, do banco ou da interfa
 
 ## Testes
 
-As regras de negócio têm 147 testes de unidade em `app/src/test`, que rodam na JVM, sem emulador:
+As regras de negócio têm 149 testes de unidade em `app/src/test`, que rodam na JVM, sem emulador:
 
 ```
 ./gradlew testDebugUnitTest
