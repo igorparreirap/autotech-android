@@ -15,11 +15,14 @@ import com.autotech.android.domain.MaintenanceCatalog
 /** Junta cada ciclo ao serviço que serve de marco zero (RN-04). Ciclos sem serviço são ignorados. */
 fun toCycleInputs(cycles: List<MaintenanceCycleEntity>, records: List<MaintenanceRecordEntity>): List<CycleInput> {
     val byId = records.associateBy { it.id }
-    return cycles.mapNotNull { c ->
+    val inputs = cycles.mapNotNull { c ->
         byId[c.linkedMaintenanceId]?.let { r ->
             CycleInput(c.itemKey, c.intervalKm, c.intervalMonths, r.eventKm, r.eventDateMillis)
         }
     }
+    // serviço mais novo sem intervalo encerra o ciclo anterior do mesmo item (RN-04)
+    val lastService = records.groupBy { it.itemKey }.mapValues { (_, l) -> l.maxOf { it.eventDateMillis } }
+    return com.autotech.android.domain.MaintenanceCycles.dropSuperseded(inputs, lastService)
 }
 
 fun MaintenanceRecordEntity.toExpense(): Expense =

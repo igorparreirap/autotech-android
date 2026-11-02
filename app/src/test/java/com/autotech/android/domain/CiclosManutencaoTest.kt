@@ -64,4 +64,18 @@ class CiclosManutencaoTest {
             CycleInput("oil", 10_000, null, 59_000, now), CycleInput("brake", 10_000, null, 51_000, now)), now)
         assertEquals("brake", order.first().itemKey)
     }
+
+    @Test
+    fun `troca mais nova sem intervalo encerra o ciclo anterior do item`() {
+        val antigo = CycleInput("wheel", 10_000, 12, 40_000, monthsAgo(14))
+        val restantes = MaintenanceCycles.dropSuperseded(listOf(antigo), mapOf("wheel" to now))
+        assertTrue(restantes.isEmpty())
+    }
+
+    @Test
+    fun `ciclo do servico mais recente continua monitorado`() {
+        val atual = CycleInput("oil", 10_000, null, 50_000, now)
+        val restantes = MaintenanceCycles.dropSuperseded(listOf(atual), mapOf("oil" to now))
+        assertEquals(listOf(atual), restantes)
+    }
 }

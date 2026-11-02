@@ -56,6 +56,14 @@ object MaintenanceCycles {
             .map { c -> evaluateOne(currentKm, c, now) }
             .sortedByDescending { it.usedFraction }
 
+    /**
+     * RN-04: um serviço mais novo do mesmo item, registrado sem intervalo, encerra o ciclo anterior.
+     * É o caso de uma peça sem prazo de troca, como um volante ou uma peça que quebrou.
+     * [lastServiceByItem] traz a data do serviço mais recente de cada item.
+     */
+    fun dropSuperseded(cycles: List<CycleInput>, lastServiceByItem: Map<String, Long>): List<CycleInput> =
+        cycles.filter { c -> c.serviceDateMillis >= (lastServiceByItem[c.itemKey] ?: c.serviceDateMillis) }
+
     private fun evaluateOne(currentKm: Long, c: CycleInput, now: Long): CycleStatus {
         var kmFrac: Float? = null
         var kmLeft: Long? = null
