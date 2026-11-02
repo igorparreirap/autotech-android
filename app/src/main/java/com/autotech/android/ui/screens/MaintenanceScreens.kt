@@ -585,6 +585,12 @@ fun AddMaintenanceScreen(
                     AtField(intervalKm, { intervalKm = it.filter { c -> c.isDigit() } }, "Em (km)", keyboardOptions = numeric, modifier = Modifier.weight(1f))
                     AtField(intervalMonths, { intervalMonths = it.filter { c -> c.isDigit() } }, "Em (meses)", keyboardOptions = numeric, modifier = Modifier.weight(1f))
                 }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Deixe em branco se a peça não tem prazo de troca, como um volante ou uma peça que quebrou. Se o item tinha alerta, ele deixa de ser acompanhado.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AtColors.Muted
+                )
             }
         }
 

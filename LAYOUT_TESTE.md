@@ -272,3 +272,13 @@ apaga os dados de teste.
   ("Requested internal only, but not enough space"), entao o teste de rotacao ainda precisa ser feito.
 - Teste de rotacao (29/10/2026, feito pelo usuario apos liberar espaco no emulador): o nome continua
   na saudacao depois de girar a tela. Correcao confirmada.
+
+## Rodada 27 (02/11/2026) - troca sem prazo definido
+- Verificado: o intervalo (Em km / Em meses) ja era opcional. Com os dois em branco, a manutencao
+  e salva sem ciclo e o item nao gera alerta (RN-04).
+- Problema: se o item ja tinha ciclo e era trocado de novo sem intervalo (peca sem prazo, como um
+  volante, ou uma peca que quebrou), o ciclo antigo continuava ativo, contado a partir da troca anterior.
+- Correcao: MaintenanceCycles.dropSuperseded descarta o ciclo quando existe servico mais novo do
+  mesmo item; toCycleInputs (data/mapper) aplica a regra para tela inicial, manutencoes,
+  notificacoes e worker. O card "Alerta personalizado" ganhou um texto explicando que pode ficar em branco.
+- Testes: 2 novos em CiclosManutencaoTest (149 no total).
