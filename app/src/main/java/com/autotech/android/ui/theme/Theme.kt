@@ -13,7 +13,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Paleta do layout "TestLayout": tema claro com as cores da logo (branco e azul).
+ * Paleta do app: tema claro com as cores da logo (branco e azul).
  */
 object AtColors {
     // Paleta baseada na logo do AutoTech (azul #1878D8, azul-claro #74B8F0, azul-marinho)
@@ -85,7 +85,7 @@ private val AtShapes = Shapes(
     extraLarge = RoundedCornerShape(30.dp)
 )
 
-/** O layout de referência é claro; o app usa sempre o tema claro para ficar fiel a ele. */
+/** O app usa sempre o tema claro, independentemente do tema do sistema. */
 @Composable
 fun AutoTechTheme(content: @Composable () -> Unit) {
     MaterialTheme(

@@ -353,7 +353,7 @@ fun DashboardScreen(
                                 mutableIntStateOf(buckets.indexOfLast { it.total > 0 }.coerceAtLeast(0))
                             }
                             val idx = selected.coerceIn(0, buckets.lastIndex)
-                            // "balão" do item selecionado (como o "Revenue $6.4M" da referência)
+                            // "balão" do item selecionado
                             // O conteúdo animado recebe os dados da barra (e não a posição): ao trocar o
                             // período a lista muda de tamanho, e ler a barra antiga pela posição travava o app.
                             AnimatedContent(
@@ -464,7 +464,7 @@ fun DashboardScreen(
                     }
                 }
 
-                // ── Resumo rápido ("Quick Stats") ────────────────────────────
+                // ── Resumo rápido ────────────────────────────────────────────
                 Reveal(4) {
                     val fills = filtered.filter { it.isFuel }
                     val maints = filtered.filter { !it.isFuel }

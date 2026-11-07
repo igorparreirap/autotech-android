@@ -223,7 +223,7 @@ fun HomeScreen(
             }
         }
 
-        // ── Veículo em destaque ("Car Details") ─────────────────────────────
+        // ── Veículo em destaque ─────────────────────────────────────────────
         Reveal(3) {
             when {
                 vehicles == null -> AtCard(Modifier.fillMaxWidth().height(320.dp)) {}
@@ -273,7 +273,7 @@ fun HomeScreen(
 
         if (vehicle != null) {
             val main = statuses.firstOrNull()
-            // ── Odômetro ("Climate") + Próxima revisão ("Fuel Level") ───────
+            // ── Odômetro + Próxima revisão ──────────────────────────────────
             Reveal(4) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     AtCard(
@@ -372,7 +372,7 @@ fun HomeScreen(
             }
         }
 
-        // ── Lembretes ("AI Assistant") ──────────────────────────────────────
+        // ── Lembretes ───────────────────────────────────────────────────────
         if (vehicle != null) {
             Reveal(6) {
                 AtCard(Modifier.fillMaxWidth()) {
@@ -411,7 +411,7 @@ fun HomeScreen(
             }
         }
 
-        // ── Gastos do mês ("player" verde) ──────────────────────────────────
+        // ── Gastos do mês ───────────────────────────────────────────────────
         if (vehicle != null) {
             Reveal(8) {
                 val total = monthMaintenance + monthFuel
@@ -511,7 +511,7 @@ fun HomeScreen(
             )
         }
 
-        // ── Sair ("Emergency") ──────────────────────────────────────────────
+        // ── Sair ────────────────────────────────────────────────────────────
         Reveal(11) {
             AtCard(Modifier.fillMaxWidth(), contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -604,7 +604,7 @@ private fun VehicleHeroCard(vehicle: VehicleEntity, onOpen: () -> Unit) {
                     .background(AtColors.Field)
                     .padding(horizontal = 10.dp, vertical = 3.dp)
             ) {
-                // Sem combustível cadastrado, o selo convida a informar (antes mostrava "Ativo").
+                // Sem combustível cadastrado, o selo convida a informar.
                 val fuelLabel = vehicle.fuelLabel
                 Text(
                     fuelLabel ?: "Informar combustível",

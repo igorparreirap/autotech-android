@@ -405,7 +405,7 @@ fun VehicleDetailScreen(
             AtCard(Modifier.fillMaxWidth().height(360.dp)) {}
         } else {
 
-        // ── Painel principal ("Car Details") ────────────────────────────────
+        // ── Painel principal ────────────────────────────────────────────────
         Reveal(0) {
             AtCard(Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

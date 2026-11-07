@@ -77,7 +77,7 @@ import com.autotech.android.ui.components.describe
 import java.text.SimpleDateFormat
 import java.util.Date
 
-/** Cartão-resumo escuro (como a caixa preta sobre o mapa do layout). */
+/** Cartão-resumo escuro. */
 @Composable
 internal fun DarkSummaryCard(label: String, value: String, left: String, right: String) {
     AtCard(Modifier.fillMaxWidth(), color = AtColors.Deep, contentColor = Color.White) {

@@ -200,7 +200,7 @@ private fun pressScale(interaction: MutableInteractionSource): Float {
     return scale
 }
 
-/** Cartão branco com cantos grandes, como os painéis do layout de referência. */
+/** Cartão branco com cantos grandes. */
 @Composable
 fun AtCard(
     modifier: Modifier = Modifier,
@@ -258,7 +258,7 @@ fun AtCardTitle(
 
 enum class AtButtonStyle { Dark, Light, Accent, Soft, Danger }
 
-/** Botão em pílula (ex.: "Send" preto do layout). */
+/** Botão em pílula. */
 @Composable
 fun AtPillButton(
     text: String,
@@ -465,7 +465,7 @@ fun AtField(
 
 // ─── Blocos ──────────────────────────────────────────────────────────────────
 
-/** Bloco quadrado de atalho (Lock / Voice / Bluetooth... do layout). */
+/** Bloco quadrado de atalho. */
 @Composable
 fun AtTile(
     label: String,
@@ -530,7 +530,7 @@ fun AtTileGrid(tiles: List<TileSpec>, columns: Int = 3, modifier: Modifier = Mod
     }
 }
 
-/** Seletor em pílula com item ativo preto (R · P · N · D · S do layout). */
+/** Seletor em pílula com o item ativo destacado. */
 @Composable
 fun AtSegmented(
     options: List<String>,
@@ -588,7 +588,7 @@ fun AtChip(
     }
 }
 
-/** Linha de lista com ícone em caixinha (itens do "AI Assistant" do layout). */
+/** Linha de lista com ícone em caixinha. */
 @Composable
 fun AtListRow(
     title: String,
@@ -671,7 +671,7 @@ fun AtStat(label: String, value: String, modifier: Modifier = Modifier) {
 
 // ─── Gráficos ────────────────────────────────────────────────────────────────
 
-/** Medidor em arco (como o "Fuel Level 65%" do layout). [fraction] de 0 a 1. */
+/** Medidor em arco. [fraction] de 0 a 1. */
 @Composable
 fun AtGauge(
     fraction: Float,
@@ -732,7 +732,7 @@ fun AtGauge(
     }
 }
 
-/** Trilho com marcações e um botão redondo (o controle "10°C — 40°C" do layout). */
+/** Trilho com marcações e um botão redondo. */
 @Composable
 fun AtTrack(fraction: Float, modifier: Modifier = Modifier) {
     val anim by animateFloatAsState(fraction.coerceIn(0f, 1f), tween(900, easing = FastOutSlowInEasing), label = "track")
@@ -756,7 +756,7 @@ fun AtTrack(fraction: Float, modifier: Modifier = Modifier) {
     }
 }
 
-/** Barras estilo "onda de áudio" (player do layout). Parte inicial colorida conforme [fraction]. */
+/** Barras estilo "onda de áudio". Parte inicial colorida conforme [fraction]. */
 @Composable
 fun AtWaveform(fraction: Float, modifier: Modifier = Modifier, bars: Int = 42, seed: Int = 11) {
     val anim by animateFloatAsState(fraction.coerceIn(0f, 1f), tween(900), label = "wave")
@@ -934,7 +934,7 @@ fun AtPlate(plate: String, modifier: Modifier = Modifier, compact: Boolean = fal
     }
 }
 
-/** "Palco" com o carro em degradê e sombra no chão, no lugar da foto do layout. */
+/** "Palco" com o carro em degradê e sombra no chão, usado quando não há foto do veículo ou nenhum veículo cadastrado. */
 @Composable
 fun AtCarStage(modifier: Modifier = Modifier, iconSize: Dp = 150.dp, icon: ImageVector) {
     Box(

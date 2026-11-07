@@ -46,15 +46,15 @@ import com.autotech.android.ui.screens.NotificationsScreen
 import com.autotech.android.ui.screens.SearchScreen
 import com.autotech.android.ui.screens.VehicleDetailScreen
 import com.autotech.android.ui.screens.VehicleListScreen
-import androidx.compose.runtime.rememberCoroutineScope // Add this
-import kotlinx.coroutines.launch // Add this
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
 @Composable
 fun AutoTechRoot() {
     val context = LocalContext.current
     val app = context.applicationContext as AutoTechApplication
     val nav = rememberNavController()
-    val scope = rememberCoroutineScope() // 1. Create the scope here
+    val scope = rememberCoroutineScope()
     // rememberSaveable: o nome sobrevive à recriação da Activity (rotação da tela, troca de tema).
     var displayName by rememberSaveable { mutableStateOf("usuário") }
 
@@ -128,12 +128,10 @@ fun AutoTechRoot() {
                 onSignedIn = {
                     val uid = app.currentUserId!!
 
-                    // 2. Wrap the suspend call in a launch block
+                    // busca o nome antes de navegar, para a Home já abrir com ele
                     scope.launch {
                         displayName = app.graph.authRepository.getUser(uid)?.displayName ?: "usuário"
 
-                        // Move navigation inside the launch block to ensure
-                        // the name is fetched before moving screens
                         nav.navigate(NavRoutes.HOME) {
                             popUpTo(NavRoutes.AUTH) { inclusive = true }
                         }
