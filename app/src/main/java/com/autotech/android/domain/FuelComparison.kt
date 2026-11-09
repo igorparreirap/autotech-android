@@ -2,19 +2,19 @@ package com.autotech.android.domain
 
 import kotlin.math.abs
 
-/** RN-06: comparação de custo entre álcool e gasolina (RF-13). */
+/** RN-06: comparação de custo entre etanol e gasolina (RF-13). */
 object FuelComparison {
 
-    /** O álcool compensa se custar até 70% do preço da gasolina. */
+    /** O etanol compensa se custar até 70% do preço da gasolina. */
     const val ETHANOL_LIMIT = 0.70
 
     enum class Verdict { ETHANOL, GASOLINE, EQUIVALENT }
 
     data class Result(
         val verdict: Verdict,
-        /** preço do álcool ÷ preço da gasolina */
+        /** preço do etanol ÷ preço da gasolina */
         val ratio: Double,
-        /** maior preço do álcool que ainda compensa para a gasolina informada */
+        /** maior preço do etanol que ainda compensa para a gasolina informada */
         val maxEthanolPrice: Double
     )
 

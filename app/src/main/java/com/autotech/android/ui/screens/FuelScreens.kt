@@ -113,7 +113,7 @@ fun FuelListScreen(
             ConsumptionCard(periods, isFlex)
         }
 
-        // RF-13: calculadora álcool x gasolina (regra dos 70%), só faz sentido em veículo flex
+        // RF-13: calculadora etanol x gasolina (regra dos 70%), só faz sentido em veículo flex
         // (ou enquanto o combustível não foi informado)
         if (vehicle?.fuelType == null || isFlex) {
             Reveal(1) {
@@ -178,7 +178,7 @@ fun AddFuelScreen(
     var amount by remember { mutableStateOf("") }
     // RF-05: só o KM do dia do abastecimento é obrigatório; marcado como KM atual, ele atualiza o odômetro
     var isCurrent by remember { mutableStateOf(true) }
-    // RF-05: litros de álcool e de gasolina (só flex, opcional) e cálculo de consumo (qualquer veículo)
+    // RF-05: litros de etanol e de gasolina (só flex, opcional) e cálculo de consumo (qualquer veículo)
     var specify by remember { mutableStateOf(false) }
     var ethanol by remember { mutableStateOf("") }
     var gasoline by remember { mutableStateOf("") }
@@ -227,7 +227,7 @@ fun AddFuelScreen(
         val typedCurrent: Long? = if (isCurrent) ek else vehicleKm.toLongOrNull()
         val vk = typedCurrent ?: maxOf(vehicle?.currentOdometerKm ?: ek, ek)
         val lit = totalLiters()?.takeIf { it > 0 } ?: run {
-            error = if (useSplit) "Informe os litros de álcool e/ou de gasolina." else "Litros inválidos"
+            error = if (useSplit) "Informe os litros de etanol e/ou de gasolina." else "Litros inválidos"
             return
         }
         val am = parseDecimal(amount)
@@ -309,11 +309,11 @@ fun AddFuelScreen(
                 Spacer(Modifier.height(14.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (isFlex) {
-                        AtCheckRow("Especificar litros de álcool e de gasolina", specify) { specify = it }
+                        AtCheckRow("Especificar litros de etanol e de gasolina", specify) { specify = it }
                     }
                     if (useSplit) {
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            AtField(ethanol, { ethanol = it }, "Litros de álcool", leadingIcon = Icons.Rounded.WaterDrop, keyboardOptions = decimal, modifier = Modifier.weight(1f))
+                            AtField(ethanol, { ethanol = it }, "Litros de etanol", leadingIcon = Icons.Rounded.WaterDrop, keyboardOptions = decimal, modifier = Modifier.weight(1f))
                             AtField(gasoline, { gasoline = it }, "Litros de gasolina", leadingIcon = Icons.Rounded.WaterDrop, keyboardOptions = decimal, modifier = Modifier.weight(1f))
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -362,8 +362,8 @@ private fun litersTitle(r: FuelRecordEntity): String {
     val e = r.ethanolLiters
     val g = r.gasolineLiters
     return when {
-        e != null && g != null -> String.format(PT_BR, "%.2f L (%.1f álcool + %.1f gasolina)", r.liters, e, g)
-        e != null -> String.format(PT_BR, "%.2f L de álcool", r.liters)
+        e != null && g != null -> String.format(PT_BR, "%.2f L (%.1f etanol + %.1f gasolina)", r.liters, e, g)
+        e != null -> String.format(PT_BR, "%.2f L de etanol", r.liters)
         g != null -> String.format(PT_BR, "%.2f L de gasolina", r.liters)
         else -> String.format(PT_BR, "%.2f L", r.liters)
     }
@@ -371,7 +371,7 @@ private fun litersTitle(r: FuelRecordEntity): String {
 
 private fun burnedSuffix(p: ConsumptionPeriod, isFlex: Boolean): String =
     if (!isFlex) "" else when (p.burned) {
-        FuelMix.ETHANOL -> " com álcool"
+        FuelMix.ETHANOL -> " com etanol"
         FuelMix.GASOLINE -> " com gasolina"
         FuelMix.MIXED -> " com mistura"
         FuelMix.UNKNOWN -> ""
@@ -391,7 +391,7 @@ private fun ConsumptionCard(periods: List<ConsumptionPeriod>, isFlex: Boolean) {
         Row(Modifier.fillMaxWidth()) {
             AtStat("Média", String.format(PT_BR, "%.1f km/L", s.overall), Modifier.weight(1f))
             if (isFlex) {
-                AtStat("Com álcool", s.ethanol?.let { String.format(PT_BR, "%.1f km/L", it) } ?: "\u2014", Modifier.weight(1f))
+                AtStat("Com etanol", s.ethanol?.let { String.format(PT_BR, "%.1f km/L", it) } ?: "\u2014", Modifier.weight(1f))
                 AtStat("Com gasolina", s.gasoline?.let { String.format(PT_BR, "%.1f km/L", it) } ?: "\u2014", Modifier.weight(1f))
             }
         }
@@ -411,9 +411,9 @@ private fun ConsumptionPreview(fills: List<com.autotech.android.domain.FillUp>, 
         else -> {
             val driven = km - previous.km
             val fuel = if (!showFuel) "" else when (FuelConsumption.mixOf(previous.ethanolLiters, previous.gasolineLiters)) {
-                FuelMix.ETHANOL -> " com álcool"
+                FuelMix.ETHANOL -> " com etanol"
                 FuelMix.GASOLINE -> " com gasolina"
-                FuelMix.MIXED -> " com mistura de álcool e gasolina"
+                FuelMix.MIXED -> " com mistura de etanol e gasolina"
                 FuelMix.UNKNOWN -> ""
             }
             val base = "Rodou ${formatKm(driven)} km$fuel desde o abastecimento de ${df.format(Date(previous.dateMillis))} (${formatKm(previous.km)} km)"

@@ -16,7 +16,7 @@ Projeto desenvolvido como Trabalho de Conclusão de Curso em Engenharia de Compu
 - Painel financeiro com indicadores, gráficos por mês, ano e quilometragem e divisão por categoria
 - Relatório do veículo em PDF, com visualização no aplicativo e compartilhamento
 - Busca de oficinas, borracharias e postos próximos
-- Comparador entre álcool e gasolina pela regra dos 70%
+- Comparador entre etanol e gasolina pela regra dos 70%
 - Busca de funções e registros a partir da tela inicial
 - Acesso com e-mail e senha (hash BCrypt) ou com a conta Google, e recuperação de senha por código enviado ao e-mail
 

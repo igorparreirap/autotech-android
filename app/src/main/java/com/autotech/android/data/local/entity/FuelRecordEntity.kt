@@ -30,7 +30,7 @@ data class FuelRecordEntity(
     val receiptPath: String?,
     /** RF-05: data em que o registro foi lançado no app. */
     @ColumnInfo(defaultValue = "0") val registeredAtMillis: Long = 0,
-    /** RF-05: litros de álcool e de gasolina, só em veículo flex e só se o usuário especificar. */
+    /** RF-05: litros de etanol e de gasolina, só em veículo flex e só se o usuário especificar. */
     val ethanolLiters: Double? = null,
     val gasolineLiters: Double? = null,
     /** RF-05: o usuário pediu o cálculo de consumo (km/L) neste abastecimento. */

@@ -66,7 +66,7 @@ class ConsumoCombustivelTest {
     }
 
     @Test
-    fun `media com alcool de 10 km por litro`() {
+    fun `media com etanol de 10 km por litro`() {
         assertTrue(near(resumo.ethanol, 10.0))
     }
 
@@ -76,12 +76,12 @@ class ConsumoCombustivelTest {
     }
 
     @Test
-    fun `alcool rende 83 por cento da gasolina neste carro`() {
+    fun `etanol rende 83 por cento da gasolina neste carro`() {
         assertTrue(near(resumo.ethanolVsGasoline, 10.0 / 12.0))
     }
 
     @Test
-    fun `mistura de alcool e gasolina e MIXED`() {
+    fun `mistura de etanol e gasolina e MIXED`() {
         assertEquals(FuelMix.MIXED, FuelConsumption.mixOf(20.0, 20.0))
     }
 

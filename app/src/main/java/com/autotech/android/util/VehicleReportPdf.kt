@@ -537,7 +537,7 @@ private class ReportBuilder(
                 add(f.amount?.let { money.format(it) } ?: "—")
                 add(periods[f.id]?.let { p ->
                     decimal.format(p.kmPerLiter) + when (p.burned) {
-                        FuelMix.ETHANOL -> " (álcool)"
+                        FuelMix.ETHANOL -> " (etanol)"
                         FuelMix.GASOLINE -> " (gasolina)"
                         FuelMix.MIXED -> " (mistura)"
                         FuelMix.UNKNOWN -> ""

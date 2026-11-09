@@ -61,7 +61,7 @@ private fun sanitizePrice(raw: String): String {
     }.take(6)
 }
 
-/** Mini calculadora álcool x gasolina (regra dos 70%), com resultado na hora. */
+/** Mini calculadora etanol x gasolina (regra dos 70%), com resultado na hora. */
 @Composable
 fun FuelCalculatorCard(modifier: Modifier = Modifier) {
     var gasoline by rememberSaveable { mutableStateOf("") }
@@ -74,7 +74,7 @@ fun FuelCalculatorCard(modifier: Modifier = Modifier) {
     val verdict = result?.verdict
 
     AtCard(modifier.fillMaxWidth()) {
-        AtCardTitle("Álcool ou gasolina?", "Digite os preços do dia (R$ por litro)") {
+        AtCardTitle("Etanol ou gasolina?", "Digite os preços do dia (R$ por litro)") {
             Icon(Icons.Rounded.Calculate, null, tint = AtColors.Ink)
         }
         Spacer(Modifier.height(14.dp))
@@ -86,7 +86,7 @@ fun FuelCalculatorCard(modifier: Modifier = Modifier) {
                 modifier = Modifier.weight(1f)
             )
             AtField(
-                ethanol, { ethanol = sanitizePrice(it) }, "Álcool",
+                ethanol, { ethanol = sanitizePrice(it) }, "Etanol",
                 placeholder = "3,99",
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 modifier = Modifier.weight(1f)
@@ -101,7 +101,7 @@ fun FuelCalculatorCard(modifier: Modifier = Modifier) {
         ) { v ->
             if (v == null || ratio == null || g == null) {
                 Text(
-                    "O álcool compensa quando custa até 70% do preço da gasolina.",
+                    "O etanol compensa quando custa até 70% do preço da gasolina.",
                     style = MaterialTheme.typography.bodySmall,
                     color = AtColors.Muted,
                     modifier = Modifier
@@ -121,7 +121,7 @@ fun FuelCalculatorCard(modifier: Modifier = Modifier) {
                     AtLabel("Compensa abastecer com", color = Color(0xFF8E8E8E))
                     Text(
                         when (v) {
-                            FuelComparison.Verdict.ETHANOL -> "Álcool"
+                            FuelComparison.Verdict.ETHANOL -> "Etanol"
                             FuelComparison.Verdict.GASOLINE -> "Gasolina"
                             FuelComparison.Verdict.EQUIVALENT -> "Tanto faz"
                         },
@@ -130,7 +130,7 @@ fun FuelCalculatorCard(modifier: Modifier = Modifier) {
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        String.format(PT_BR, "O álcool custa %.1f%% do preço da gasolina.", ratio * 100),
+                        String.format(PT_BR, "O etanol custa %.1f%% do preço da gasolina.", ratio * 100),
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFFBDBDBD)
                     )
@@ -138,7 +138,7 @@ fun FuelCalculatorCard(modifier: Modifier = Modifier) {
                     RatioBar(ratio.toFloat())
                     Spacer(Modifier.height(10.dp))
                     Text(
-                        "Álcool vale a pena até ${formatMoney(g * FuelComparison.ETHANOL_LIMIT)} com a gasolina a ${formatMoney(g)}.",
+                        "Etanol vale a pena até ${formatMoney(g * FuelComparison.ETHANOL_LIMIT)} com a gasolina a ${formatMoney(g)}.",
                         style = MaterialTheme.typography.labelMedium,
                         color = Color.White
                     )
@@ -148,7 +148,7 @@ fun FuelCalculatorCard(modifier: Modifier = Modifier) {
     }
 }
 
-/** Barra 0–100% com a marca dos 70%; verde se o álcool estiver abaixo do limite. */
+/** Barra 0–100% com a marca dos 70%; verde se o etanol estiver abaixo do limite. */
 @Composable
 private fun RatioBar(ratio: Float) {
     val anim by animateFloatAsState(ratio.coerceIn(0f, 1f), tween(500, easing = FastOutSlowInEasing), label = "ratio")

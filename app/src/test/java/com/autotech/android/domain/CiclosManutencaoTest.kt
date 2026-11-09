@@ -78,4 +78,46 @@ class CiclosManutencaoTest {
         val restantes = MaintenanceCycles.dropSuperseded(listOf(atual), mapOf("oil" to now))
         assertEquals(listOf(atual), restantes)
     }
+
+    // Tela inicial: 183.000 km, óleo a cada 10.000 km (feito aos 180.000) e correia a cada 60.000 km (feita aos 162.000)
+    private val oleoECorreia = MaintenanceCycles.evaluate(183_000, listOf(
+        CycleInput("oil", 10_000, null, 180_000, now), CycleInput("timing", 60_000, null, 162_000, now)), now)
+
+    @Test
+    fun `odometro aponta a troca de oleo que falta menos km`() {
+        val alvo = HomeHighlights.nearestByKm(oleoECorreia)
+        assertEquals("oil", alvo?.itemKey)
+        assertEquals(7_000L, alvo?.kmLeft)
+    }
+
+    @Test
+    fun `fracao consumida maior nao decide o odometro`() {
+        assertEquals("timing", oleoECorreia.first().itemKey)
+        assertEquals("oil", HomeHighlights.nearestByKm(oleoECorreia)?.itemKey)
+    }
+
+    @Test
+    fun `medidor de revisao ignora os outros itens`() {
+        val lista = MaintenanceCycles.evaluate(10_000, listOf(
+            CycleInput("oil", 1_000, null, 9_500, now), CycleInput("review", 10_000, null, 8_000, now)), now)
+        assertEquals("review", HomeHighlights.review(lista)?.itemKey)
+    }
+
+    @Test
+    fun `sem revisao programada o medidor fica vazio`() {
+        assertNull(HomeHighlights.review(oleoECorreia))
+    }
+
+    @Test
+    fun `prazo de 4 anos vira 48 meses`() {
+        assertEquals(48, IntervalUnits.toMonths(4, inYears = true))
+        assertEquals(18, IntervalUnits.toMonths(18, inYears = false))
+        assertNull(IntervalUnits.toMonths(null, inYears = true))
+    }
+
+    @Test
+    fun `prazo gravado em multiplo de 12 meses aparece em anos`() {
+        assertEquals(4 to true, IntervalUnits.fromMonths(48))
+        assertEquals(18 to false, IntervalUnits.fromMonths(18))
+    }
 }

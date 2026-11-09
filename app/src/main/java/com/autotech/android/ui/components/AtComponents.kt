@@ -732,9 +732,12 @@ fun AtGauge(
     }
 }
 
-/** Trilho com marcações e um botão redondo. */
+/**
+ * Trilho com marcações e um botão redondo. Com [totalKm], cada marca vale 1.000 km
+ * (5.000 ou 10.000 km em intervalos longos) e a marca maior aparece a cada cinco.
+ */
 @Composable
-fun AtTrack(fraction: Float, modifier: Modifier = Modifier) {
+fun AtTrack(fraction: Float, modifier: Modifier = Modifier, totalKm: Long? = null) {
     val anim by animateFloatAsState(fraction.coerceIn(0f, 1f), tween(900, easing = FastOutSlowInEasing), label = "track")
     Canvas(
         modifier
@@ -742,10 +745,17 @@ fun AtTrack(fraction: Float, modifier: Modifier = Modifier) {
             .height(22.dp)
     ) {
         val y = size.height / 2f
-        val ticks = 24
+        val step = when {
+            totalKm == null || totalKm <= 0 -> 0L
+            totalKm / 1_000 <= 60 -> 1_000L
+            totalKm / 5_000 <= 60 -> 5_000L
+            else -> 10_000L
+        }
+        val ticks = if (step > 0) (totalKm!! / step).toInt().coerceAtLeast(1) else 24
+        val major = if (step > 0) 5 else 6
         for (i in 0..ticks) {
             val x = size.width * i / ticks
-            val h = if (i % 6 == 0) 7.dp.toPx() else 4.dp.toPx()
+            val h = if (i % major == 0 || i == ticks) 7.dp.toPx() else 4.dp.toPx()
             drawLine(AtColors.Faint, Offset(x, y - h), Offset(x, y + h), strokeWidth = 1.dp.toPx())
         }
         val r = 9.dp.toPx()

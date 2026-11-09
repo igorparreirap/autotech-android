@@ -1,5 +1,13 @@
 package com.autotech.android.ui.screens
 
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.layout.Box
+import com.autotech.android.ui.components.AtSegmented
 import com.autotech.android.ui.components.shortName
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.LaunchedEffect
@@ -73,6 +81,7 @@ import com.autotech.android.ui.components.MaintenanceItemPicker
 import com.autotech.android.ui.components.fuelType
 import com.autotech.android.data.mapper.toCycleInputs
 import com.autotech.android.domain.MaintenanceCycles
+import com.autotech.android.domain.IntervalUnits
 import com.autotech.android.ui.components.describe
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -113,6 +122,9 @@ fun MaintenanceListScreen(
     val cycles by cyclesFlow.collectAsState(initial = emptyList())
     val pendingFlow = remember(vehicleId) { app.graph.maintenanceRepository.observePending(vehicleId) }
     val pendingList by pendingFlow.collectAsState(initial = emptyList())
+    // "Próximas trocas" e "Histórico" começam fechados e abrem ao toque
+    var showNext by rememberSaveable { mutableStateOf(false) }
+    var showHistory by rememberSaveable { mutableStateOf(false) }
     val statuses = remember(vehicle, cycles, records, pendingList) {
         val skip = pendingList.map { it.itemKey }.toSet()
         vehicle?.let { MaintenanceCycles.evaluate(it.currentOdometerKm, toCycleInputs(cycles, records)) }.orEmpty()
@@ -147,7 +159,7 @@ fun MaintenanceListScreen(
                         pendingList.forEach { p ->
                             AtListRow(
                                 title = MaintenanceCatalog.label(p.itemKey),
-                                subtitle = "Feita em ${df.format(Date(p.doneDateMillis))}\nFalta: km, valor, descrição e comprovante",
+                                subtitle = "Feita em ${df.format(Date(p.doneDateMillis))}\nFalta o km do serviço; valor, descrição e comprovante são opcionais",
                                 subtitleLines = 2,
                                 icon = maintenanceIcon(p.itemKey),
                                 iconBg = AtColors.AccentSoft,
@@ -171,9 +183,14 @@ fun MaintenanceListScreen(
         if (statuses.isNotEmpty()) {
             Reveal(1) {
                 AtCard(Modifier.fillMaxWidth()) {
-                    AtCardTitle("Próximas trocas", "Já fez e não registrou? Toque em \u201cJá fiz\u201d")
-                    Spacer(Modifier.height(12.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    // a lista só abre quando o usuário toca no título
+                    CollapsibleTitle(
+                        "Próximas trocas",
+                        if (showNext) "Já fez e não registrou? Toque em \u201cJá fiz\u201d" else "${statuses.size} item(ns) com ciclo · toque para ver",
+                        showNext
+                    ) { showNext = !showNext }
+                    if (showNext) Spacer(Modifier.height(12.dp))
+                    if (showNext) Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         statuses.forEach { s ->
                             AtListRow(
                                 title = s.label,
@@ -199,9 +216,13 @@ fun MaintenanceListScreen(
 
         Reveal(1) {
             AtCard(Modifier.fillMaxWidth()) {
-                AtCardTitle("Histórico", "Do mais recente ao mais antigo")
-                Spacer(Modifier.height(14.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                CollapsibleTitle(
+                    "Histórico",
+                    if (showHistory) "Do mais recente ao mais antigo" else "${records.size} registro(s) · toque para ver",
+                    showHistory
+                ) { showHistory = !showHistory }
+                if (showHistory || records.isEmpty()) Spacer(Modifier.height(14.dp))
+                if (showHistory || records.isEmpty()) Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (records.isEmpty()) {
                         AtListRow(
                             title = "Nenhuma manutenção registrada",
@@ -281,6 +302,9 @@ fun AddMaintenanceScreen(
     var saving by remember { mutableStateOf(false) }
     var intervalKm by remember { mutableStateOf("") }
     var intervalMonths by remember { mutableStateOf("") }
+    // RF-11: prazo em meses ou em anos (vale para todos os campos de tempo do registro)
+    var inYears by rememberSaveable { mutableStateOf(false) }
+    val timeLabel = if (inYears) "Em (anos)" else "Em (meses)"
     // RF-04 / RF-05: data do evento e data do registro (por padrão, o mesmo dia)
     var sameDay by remember { mutableStateOf(true) }
     var eventDate by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -293,10 +317,12 @@ fun AddMaintenanceScreen(
             a.get(java.util.Calendar.DAY_OF_YEAR) == b.get(java.util.Calendar.DAY_OF_YEAR)
     }
 
-    // RF-04 / RF-11: revisão com vários itens; intervalo em comum (junção) ou próprio (separação)
+    // RF-04 / RF-11: vários itens no mesmo registro, tanto na revisão quanto numa manutenção avulsa
+    // (várias peças ou serviços no mesmo comprovante); intervalo em comum (junção) ou próprio (separação)
     val isReview = itemKey in MaintenanceCatalog.REVIEW_KEYS
     var reviewItems by remember { mutableStateOf(listOf<String>()) }
     var ownInterval by remember { mutableStateOf(mapOf<String, Pair<String, String>>()) }
+    LaunchedEffect(isReview) { reviewItems = emptyList(); ownInterval = emptyMap() }
     var groupKm by remember { mutableStateOf("") }
     var groupMonths by remember { mutableStateOf("") }
     var addQuery by remember { mutableStateOf("") }
@@ -313,11 +339,13 @@ fun AddMaintenanceScreen(
         registeredDate = System.currentTimeMillis()
         app.graph.maintenanceRepository.lastCycleFor(vehicleId, p.itemKey)?.let { c ->
             intervalKm = c.intervalKm?.toString().orEmpty()
-            intervalMonths = c.intervalMonths?.toString().orEmpty()
+            val (t, years) = IntervalUnits.fromMonths(c.intervalMonths)
+            intervalMonths = t?.toString().orEmpty()
+            inYears = years
         }
         completing = "Você marcou ${MaintenanceCatalog.label(p.itemKey)} como feita em " +
             SimpleDateFormat("dd/MM/yyyy", PT_BR).format(Date(p.doneDateMillis)) +
-            ". Complete a quilometragem e, se quiser, o valor, a descrição e o comprovante."
+            ". Informe o km do serviço; valor, descrição e comprovante são opcionais."
     }
 
     fun save() {
@@ -358,7 +386,7 @@ fun AddMaintenanceScreen(
             app.graph.maintenanceRepository.addRecord(record, updateVehicleOdometerTo = typedCurrent)
                 .onSuccess { maintId ->
                     val ik = intervalKm.toIntOrNull()
-                    val im = intervalMonths.toIntOrNull()
+                    val im = IntervalUnits.toMonths(intervalMonths.toIntOrNull(), inYears)
                     if (ik != null || im != null) {
                         app.graph.maintenanceRepository.addCustomCycle(
                             vehicleId = vehicleId,
@@ -368,17 +396,21 @@ fun AddMaintenanceScreen(
                             intervalMonths = im
                         )
                     }
-                    // itens feitos na revisão: um registro por item, com o intervalo em comum ou o próprio
-                    if (key in MaintenanceCatalog.REVIEW_KEYS) {
-                        val note = "Feito na ${MaintenanceCatalog.label(key).lowercase(PT_BR)} de " +
-                            SimpleDateFormat("dd/MM/yyyy", PT_BR).format(Date(eventDate))
-                        for (item in reviewItems) {
+                    // itens feitos no mesmo atendimento (revisão ou comprovante com várias peças/serviços):
+                    // um registro por item, com o intervalo em comum ou o próprio; valor e comprovante ficam no principal
+                    run {
+                        val day = SimpleDateFormat("dd/MM/yyyy", PT_BR).format(Date(eventDate))
+                        val note = if (key in MaintenanceCatalog.REVIEW_KEYS)
+                            "Feito na ${MaintenanceCatalog.label(key).lowercase(PT_BR)} de $day"
+                        else
+                            "Feito no mesmo atendimento de ${MaintenanceCatalog.label(key)} em $day"
+                        for (item in reviewItems.filter { it != key }) {
                             val sub = record.copy(id = 0, itemKey = item, amount = null, laborAmount = null, description = note, receiptPath = null)
                             app.graph.maintenanceRepository.addRecord(sub, updateVehicleOdometerTo = typedCurrent)
                                 .onSuccess { subId ->
                                     val own = ownInterval[item]
                                     val km = if (own != null) own.first.toIntOrNull() else groupKm.toIntOrNull()
-                                    val months = if (own != null) own.second.toIntOrNull() else groupMonths.toIntOrNull()
+                                    val months = IntervalUnits.toMonths(if (own != null) own.second.toIntOrNull() else groupMonths.toIntOrNull(), inYears)
                                     if (km != null || months != null) {
                                         app.graph.maintenanceRepository.addCustomCycle(vehicleId, subId, item, km, months)
                                     }
@@ -415,12 +447,13 @@ fun AddMaintenanceScreen(
             }
         }
 
-        if (isReview) {
+        if (itemKey != null) {
             Reveal(0) {
                 AtCard(Modifier.fillMaxWidth()) {
-                    AtCardTitle("Itens da revisão", "Marque o que foi feito ou verificado")
+                    if (isReview) AtCardTitle("Itens da revisão", "Marque o que foi feito ou verificado")
+                    else AtCardTitle("Outros itens do mesmo comprovante", "Opcional · peças ou serviços feitos no mesmo atendimento")
                     Spacer(Modifier.height(10.dp))
-                    val suggestions = MaintenanceCatalog.reviewChecklist(vehicle?.fuelType).map { it.key }
+                    val suggestions = if (isReview) MaintenanceCatalog.reviewChecklist(vehicle?.fuelType).map { it.key } else emptyList()
                     val extra = reviewItems.filter { it !in suggestions }
                     Column {
                         (suggestions + extra).forEach { k ->
@@ -436,7 +469,7 @@ fun AddMaintenanceScreen(
                         Spacer(Modifier.height(8.dp))
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             MaintenanceCatalog.search(addQuery, vehicle?.fuelType)
-                                .filter { it.key !in MaintenanceCatalog.REVIEW_KEYS }
+                                .filter { it.key !in MaintenanceCatalog.REVIEW_KEYS && it.key != itemKey }
                                 .take(8)
                                 .forEach { item ->
                                     AtChip(item.label, selected = item.key in reviewItems, onClick = {
@@ -450,9 +483,11 @@ fun AddMaintenanceScreen(
                         Spacer(Modifier.height(16.dp))
                         AtLabel("Intervalo em comum dos itens marcados")
                         Spacer(Modifier.height(8.dp))
+                        AtSegmented(listOf("Meses", "Anos"), if (inYears) 1 else 0, { inYears = it == 1 })
+                        Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             AtField(groupKm, { groupKm = it.filter { c -> c.isDigit() } }, "Em (km)", keyboardOptions = numeric, modifier = Modifier.weight(1f))
-                            AtField(groupMonths, { groupMonths = it.filter { c -> c.isDigit() } }, "Em (meses)", keyboardOptions = numeric, modifier = Modifier.weight(1f))
+                            AtField(groupMonths, { groupMonths = it.filter { c -> c.isDigit() } }, timeLabel, keyboardOptions = numeric, modifier = Modifier.weight(1f))
                         }
                         Spacer(Modifier.height(6.dp))
                         Text(
@@ -475,7 +510,7 @@ fun AddMaintenanceScreen(
                                     AtField(own.second, { v ->
                                         val cur = ownInterval[k] ?: ("" to "")
                                         ownInterval = ownInterval + (k to (cur.first to v.filter { c -> c.isDigit() }))
-                                    }, "Em (meses)", keyboardOptions = numeric, modifier = Modifier.weight(1f))
+                                    }, timeLabel, keyboardOptions = numeric, modifier = Modifier.weight(1f))
                                 }
                             }
                         }
@@ -581,9 +616,11 @@ fun AddMaintenanceScreen(
                     Icon(Icons.Rounded.NotificationsActive, null, tint = AtColors.Ink)
                 }
                 Spacer(Modifier.height(14.dp))
+                AtSegmented(listOf("Meses", "Anos"), if (inYears) 1 else 0, { inYears = it == 1 })
+                Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                     AtField(intervalKm, { intervalKm = it.filter { c -> c.isDigit() } }, "Em (km)", keyboardOptions = numeric, modifier = Modifier.weight(1f))
-                    AtField(intervalMonths, { intervalMonths = it.filter { c -> c.isDigit() } }, "Em (meses)", keyboardOptions = numeric, modifier = Modifier.weight(1f))
+                    AtField(intervalMonths, { intervalMonths = it.filter { c -> c.isDigit() } }, timeLabel, keyboardOptions = numeric, modifier = Modifier.weight(1f))
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
@@ -599,5 +636,24 @@ fun AddMaintenanceScreen(
         AtPillButton("Salvar manutenção", { save() }, Modifier.fillMaxWidth(), loading = saving)
         AtPillButton("Cancelar", onCancel, Modifier.fillMaxWidth(), style = AtButtonStyle.Light)
         Spacer(Modifier.height(8.dp))
+    }
+}
+
+/** Título de cartão que abre e fecha a lista ao toque. */
+@Composable
+private fun CollapsibleTitle(title: String, subtitle: String, open: Boolean, onToggle: () -> Unit) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onToggle)
+    ) {
+        AtCardTitle(title, subtitle) {
+            Icon(
+                if (open) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
+                if (open) "Fechar" else "Abrir",
+                tint = AtColors.Ink
+            )
+        }
     }
 }

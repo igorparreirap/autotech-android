@@ -1,6 +1,7 @@
 package com.autotech.android.ui.screens
 
 import com.autotech.android.domain.MaintenanceCycles
+import com.autotech.android.domain.HomeHighlights
 import com.autotech.android.data.mapper.toCycleInputs
 import com.autotech.android.ui.components.describe
 import com.autotech.android.ui.components.shortName
@@ -154,6 +155,12 @@ fun HomeScreen(
         vehicle?.let { MaintenanceCycles.evaluate(it.currentOdometerKm, toCycleInputs(cycles, records)) }.orEmpty()
             .filter { it.itemKey !in skip }
     }
+    // RN-03: a seção "Lembretes" só mostra o que o motor de notificações já avisaria agora
+    val reminderKeys = remember(vehicle, cycles, records, pendingAll) {
+        val skip = pendingAll.filter { it.vehicleId == vehicle?.id }.map { it.itemKey }.toSet()
+        vehicle?.let { HomeHighlights.reminderKeys(it.currentOdometerKm, toCycleInputs(cycles, records), skipItems = skip) }.orEmpty()
+    }
+    val reminders = statuses.filter { it.itemKey in reminderKeys }
 
     // Gastos do mês corrente (veículo selecionado)
     val monthKey = remember { SimpleDateFormat("yyyy-MM", PT_BR).format(Date()) }
@@ -193,7 +200,7 @@ fun HomeScreen(
                 userName = userName,
                 onSearch = onSearch,
                 onBell = onNotifications,
-                hasAlert = statuses.any { it.soon } || pendingAll.isNotEmpty(),
+                hasAlert = reminders.isNotEmpty() || pendingAll.isNotEmpty(),
                 onSignOut = onSignOut
             )
         }
@@ -257,7 +264,7 @@ fun HomeScreen(
                             AtListRow(
                                 title = MaintenanceCatalog.label(p.itemKey),
                                 subtitle = listOfNotNull(owner?.shortName, "feita em ${pdf.format(Date(p.doneDateMillis))}").joinToString(" · ") +
-                                    "\nFalta: km, valor, descrição e comprovante",
+                                    "\nFalta o km do serviço; valor, descrição e comprovante são opcionais",
                                 subtitleLines = 2,
                                 icon = maintenanceIcon(p.itemKey),
                                 iconBg = AtColors.AccentSoft,
@@ -272,7 +279,8 @@ fun HomeScreen(
         }
 
         if (vehicle != null) {
-            val main = statuses.firstOrNull()
+            // Medidor: só a revisão. Odômetro: a troca por km mais próxima (menor km restante).
+            val main = HomeHighlights.review(statuses)
             // ── Odômetro + Próxima revisão ──────────────────────────────────
             Reveal(4) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -298,21 +306,29 @@ fun HomeScreen(
                                 Icon(Icons.Rounded.Speed, null, Modifier.size(26.dp))
                             }
                             Spacer(Modifier.height(6.dp))
-                            val kmCycle = statuses.firstOrNull { it.endKm != null }
+                            val kmCycle = HomeHighlights.nearestByKm(statuses)
+                            val kmLeft = kmCycle?.kmLeft
                             AtLabel(
-                                if (kmCycle?.kmLeft != null) "Próx. ${kmCycle.label}" else "Sem ciclo por km",
+                                if (kmCycle != null) "Próx. ${kmCycle.label}" else "Sem ciclo por km",
                                 color = AtColors.Ink
                             )
+                            if (kmLeft != null) {
+                                AtLabel(
+                                    if (kmLeft >= 0) "Faltam ${formatKm(kmLeft)} km" else "Vencida há ${formatKm(abs(kmLeft))} km",
+                                    color = if (kmLeft < 0) AtColors.Danger else AtColors.Muted
+                                )
+                            }
                             Spacer(Modifier.weight(1f))
-                            if (kmCycle?.endKm != null) {
+                            val endKm = kmCycle?.endKm
+                            if (kmCycle != null && endKm != null) {
                                 Row {
                                     AtLabel(formatKm(kmCycle.startKm))
                                     Spacer(Modifier.weight(1f))
-                                    AtLabel(formatKm(kmCycle.endKm))
+                                    AtLabel(formatKm(endKm))
                                 }
-                                AtTrack(kmCycle.usedFraction)
+                                AtTrack(kmCycle.usedFraction, totalKm = endKm - kmCycle.startKm)
                             } else {
-                                AtTrack(0.5f)
+                                AtTrack(0f)
                             }
                         }
                     }
@@ -328,7 +344,7 @@ fun HomeScreen(
                                 Text("Revisão", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                                 Icon(Icons.Rounded.MoreHoriz, null, Modifier.size(20.dp))
                             }
-                            AtLabel("Vida útil restante")
+                            AtLabel(if (main != null) "Vida útil restante" else "Sem revisão programada")
                             Spacer(Modifier.weight(1f))
                             val remaining = main?.let { (1f - it.usedFraction).coerceIn(0f, 1f) }
                             AtGauge(
@@ -347,7 +363,7 @@ fun HomeScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    (main?.label ?: "Sem ciclo").uppercase(PT_BR),
+                                    (main?.label ?: "Sem ciclo de revisão").uppercase(PT_BR),
                                     style = MaterialTheme.typography.labelSmall,
                                     modifier = Modifier.weight(1f),
                                     maxLines = 1,
@@ -372,23 +388,15 @@ fun HomeScreen(
             }
         }
 
-        // ── Lembretes ───────────────────────────────────────────────────────
-        if (vehicle != null) {
+        // ── Lembretes: só aparecem nas etapas de aviso do motor de notificações (RN-03) ──
+        if (vehicle != null && reminders.isNotEmpty()) {
             Reveal(6) {
                 AtCard(Modifier.fillMaxWidth()) {
-                    AtCardTitle("Lembretes", "Ciclos de manutenção do ${vehicle.shortName}")
+                    AtCardTitle("Lembretes", "Trocas do ${vehicle.shortName} no prazo de aviso")
                     Spacer(Modifier.height(14.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        if (statuses.isEmpty()) {
-                            AtListRow(
-                                title = "Nenhum ciclo definido",
-                                subtitle = "Defina km/meses ao registrar uma manutenção",
-                                icon = Icons.Rounded.NotificationsNone,
-                                onClick = { onMaintenance(vehicle.id) },
-                                trailing = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = AtColors.Muted) }
-                            )
-                        } else {
-                            statuses.take(4).forEach { s ->
+                        run {
+                            reminders.take(4).forEach { s ->
                                 AtListRow(
                                     title = s.label,
                                     subtitle = s.describe(),
