@@ -96,12 +96,12 @@ fun VehicleReportDialog(
                     style = MaterialTheme.typography.bodyMedium
                 )
                 AtCheckRow("Abastecimentos (${fuel.size})", includeFuel) { includeFuel = it }
-                val receipts = (m?.count { !it.receiptPath.isNullOrBlank() } ?: 0) +
-                    if (includeFuel) fuel.count { !it.receiptPath.isNullOrBlank() } else 0
+                val receipts = (m?.sumOf { com.autotech.android.domain.ReceiptPaths.count(it.receiptPath) } ?: 0) +
+                    if (includeFuel) fuel.sumOf { com.autotech.android.domain.ReceiptPaths.count(it.receiptPath) } else 0
                 AtCheckRow("Comprovantes anexados ($receipts)", includeReceipts) { includeReceipts = it }
                 if (includeReceipts) {
                     Text(
-                        "Fotos e PDFs dos comprovantes entram como páginas no final do relatório.",
+                        "No final do relatório, as fotos entram reduzidas, quatro por linha, junto do registro a que pertencem. Comprovantes em PDF entram como páginas.",
                         style = MaterialTheme.typography.bodySmall,
                         color = AtColors.Muted
                     )

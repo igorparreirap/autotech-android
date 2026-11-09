@@ -6,7 +6,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import com.autotech.android.ui.theme.AtColors
-import com.autotech.android.ui.components.ReceiptAttachment
+import com.autotech.android.ui.components.ReceiptAttachments
+import com.autotech.android.ui.components.ReceiptOpenButton
+import com.autotech.android.ui.components.AtSegmented
+import com.autotech.android.domain.FuelChoice
+import com.autotech.android.domain.FuelEntry
+import com.autotech.android.domain.ReceiptPaths
 import com.autotech.android.util.PendingReceipt
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -144,11 +149,7 @@ fun FuelListScreen(
                             icon = Icons.Rounded.LocalGasStation,
                             trailing = {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    r.receiptPath?.let { path ->
-                                        IconButton(onClick = { ReceiptFileStore.open(context, path) }) {
-                                            Icon(Icons.Rounded.AttachFile, "Abrir comprovante", tint = AtColors.Primary)
-                                        }
-                                    }
+                                    ReceiptOpenButton(r.receiptPath)
                                     Text(r.amount?.let { formatMoney(it) } ?: "—", style = MaterialTheme.typography.titleSmall)
                                 }
                             }
@@ -178,15 +179,15 @@ fun AddFuelScreen(
     var amount by remember { mutableStateOf("") }
     // RF-05: só o KM do dia do abastecimento é obrigatório; marcado como KM atual, ele atualiza o odômetro
     var isCurrent by remember { mutableStateOf(true) }
-    // RF-05: litros de etanol e de gasolina (só flex, opcional) e cálculo de consumo (qualquer veículo)
-    var specify by remember { mutableStateOf(false) }
+    // RF-05: em veículo flex, o combustível é obrigatório (etanol, gasolina ou os dois, com os litros de cada um)
+    var choice by remember { mutableStateOf<FuelChoice?>(null) }
     var ethanol by remember { mutableStateOf("") }
     var gasoline by remember { mutableStateOf("") }
     var compute by remember { mutableStateOf(false) }
     val fillsFlow = remember(vehicleId) { app.graph.fuelRepository.observeRecords(vehicleId) }
     val existing by fillsFlow.collectAsState(initial = emptyList())
-    // comprovante escolhido (qualquer tipo de arquivo), guardado de vez ao salvar
-    var pending by remember { mutableStateOf<PendingReceipt?>(null) }
+    // comprovantes escolhidos (qualquer tipo de arquivo, vários), guardados de vez ao salvar
+    var pending by remember { mutableStateOf<List<PendingReceipt>>(emptyList()) }
     val vehicleFlow = remember(vehicleId) { app.graph.vehicleRepository.observeVehicle(vehicleId) }
     val vehicle by vehicleFlow.collectAsState(initial = null)
     LaunchedEffect(Unit) { ReceiptFileStore.cleanupPending(context) }
@@ -206,7 +207,7 @@ fun AddFuelScreen(
 
 
     val isFlex = vehicle?.fuelType == FuelType.FLEX
-    val useSplit = isFlex && specify
+    val useSplit = isFlex && choice == FuelChoice.BOTH
     fun totalLiters(): Double? =
         if (useSplit) {
             val e = parseDecimal(ethanol) ?: 0.0
@@ -226,33 +227,34 @@ fun AddFuelScreen(
         // RN-02 / RN-05: o KM atual é opcional; sem ele, o odômetro do veículo não muda
         val typedCurrent: Long? = if (isCurrent) ek else vehicleKm.toLongOrNull()
         val vk = typedCurrent ?: maxOf(vehicle?.currentOdometerKm ?: ek, ek)
-        val lit = totalLiters()?.takeIf { it > 0 } ?: run {
-            error = if (useSplit) "Informe os litros de etanol e/ou de gasolina." else "Litros inválidos"
-            return
-        }
+        val lit = FuelEntry.liters(isFlex, choice, parseDecimal(liters), parseDecimal(ethanol), parseDecimal(gasoline))
+            .getOrElse {
+                error = it.message
+                return
+            }
         val am = parseDecimal(amount)
         scope.launch {
             saving = true
             error = null
             val base = ReceiptFileStore.baseName("Abastecimento", vehicle?.shortName, vehicle?.plate, null, eventDate)
-            val receiptPath = pending?.let { ReceiptFileStore.finalize(context, it, base) }
+            val saved = ReceiptFileStore.finalizeAll(context, pending, base)
             val record = FuelRecordEntity(
                 vehicleId = vehicleId,
                 dateMillis = eventDate,
                 registeredAtMillis = registeredDate,
                 eventKm = ek,
                 vehicleKm = vk,
-                liters = lit,
+                liters = lit.total,
                 amount = am,
-                receiptPath = receiptPath,
-                ethanolLiters = if (useSplit) parseDecimal(ethanol)?.takeIf { it > 0 } else null,
-                gasolineLiters = if (useSplit) parseDecimal(gasoline)?.takeIf { it > 0 } else null,
+                receiptPath = ReceiptPaths.join(saved.map { it.first }),
+                ethanolLiters = lit.ethanol,
+                gasolineLiters = lit.gasoline,
                 computeConsumption = compute
             )
             app.graph.fuelRepository.addRecord(record, updateVehicleOdometerTo = typedCurrent)
                 .onSuccess { onDone() }
                 .onFailure {
-                    receiptPath?.let { path -> pending?.let { pr -> ReceiptFileStore.revert(path, pr) } }
+                    ReceiptFileStore.revertAll(saved)
                     error = it.message
                 }
             saving = false
@@ -309,7 +311,13 @@ fun AddFuelScreen(
                 Spacer(Modifier.height(14.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (isFlex) {
-                        AtCheckRow("Especificar litros de etanol e de gasolina", specify) { specify = it }
+                        Text("Combustível", style = MaterialTheme.typography.labelLarge, color = AtColors.Muted)
+                        AtSegmented(
+                            FuelChoice.entries.map { it.label },
+                            choice?.ordinal ?: -1,
+                            { choice = FuelChoice.entries[it] },
+                            container = AtColors.Field
+                        )
                     }
                     if (useSplit) {
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -339,7 +347,7 @@ fun AddFuelScreen(
                             showFuel = isFlex
                         )
                     }
-                    ReceiptAttachment(
+                    ReceiptAttachments(
                         pending = pending,
                         onChange = { pending = it },
                         finalBaseName = ReceiptFileStore.baseName("Abastecimento", vehicle?.shortName, vehicle?.plate, null, eventDate)

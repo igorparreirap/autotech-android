@@ -5,6 +5,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,9 +14,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Description
-import androidx.compose.material.icons.rounded.SwapHoriz
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -31,11 +35,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.autotech.android.domain.ReceiptPaths
 import com.autotech.android.ui.theme.AtColors
 import com.autotech.android.util.PendingReceipt
 import com.autotech.android.util.ReceiptFileStore
 import kotlinx.coroutines.launch
+import java.io.File
 
 /** Linha com caixa de seleção (ex.: "Mesmo KM para o serviço e o registro"). */
 @Composable
@@ -61,67 +68,97 @@ fun AtCheckRow(text: String, checked: Boolean, onChange: (Boolean) -> Unit) {
 }
 
 /**
- * Anexo de comprovante: aceita qualquer tipo de arquivo. Mostra o nome original e
- * o nome padronizado com que o arquivo será guardado ao salvar o registro.
+ * RF-04 / RF-05: anexos de comprovante. Aceita qualquer tipo de arquivo e vários de uma vez
+ * (fotos da bomba e do painel, nota fiscal...). Mostra o nome original de cada um e o nome
+ * padronizado com que será guardado ao salvar o registro.
  */
 @Composable
-fun ReceiptAttachment(
-    pending: PendingReceipt?,
-    onChange: (PendingReceipt?) -> Unit,
+fun ReceiptAttachments(
+    pending: List<PendingReceipt>,
+    onChange: (List<PendingReceipt>) -> Unit,
     finalBaseName: String
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var loading by remember { mutableStateOf(false) }
 
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) {
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        if (uris.isNotEmpty()) {
             scope.launch {
                 loading = true
-                val staged = ReceiptFileStore.stage(context, uri)
+                val staged = uris.mapNotNull { ReceiptFileStore.stage(context, it) }
                 loading = false
-                if (staged == null) {
-                    Toast.makeText(context, "Não foi possível anexar esse arquivo.", Toast.LENGTH_SHORT).show()
-                } else {
-                    ReceiptFileStore.discard(pending)
-                    onChange(staged)
+                if (staged.size < uris.size) {
+                    Toast.makeText(context, "Alguns arquivos não puderam ser anexados.", Toast.LENGTH_SHORT).show()
                 }
+                if (staged.isNotEmpty()) onChange(pending + staged)
             }
         }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (pending != null) {
+        pending.forEachIndexed { i, p ->
+            val suffix = if (i == 0) "" else "_${i + 1}"
             AtListRow(
-                title = pending.originalName,
-                subtitle = "Será salvo como $finalBaseName.${pending.extension}",
+                title = p.originalName,
+                subtitle = "Será salvo como $finalBaseName$suffix.${p.extension}",
                 subtitleLines = 2,
                 icon = Icons.Rounded.Description,
                 iconBg = AtColors.AccentSoft,
                 iconTint = AtColors.Primary,
                 trailing = {
                     IconButton(onClick = {
-                        ReceiptFileStore.discard(pending)
-                        onChange(null)
+                        ReceiptFileStore.discard(p)
+                        onChange(pending - p)
                     }) { Icon(Icons.Rounded.Close, "Remover comprovante", tint = AtColors.Muted) }
                 }
             )
         }
         AtPillButton(
-            if (pending == null) "Anexar comprovante" else "Trocar arquivo",
+            if (pending.isEmpty()) "Anexar comprovantes" else "Anexar mais arquivos",
             // qualquer tipo de arquivo: foto, PDF, XML da nota fiscal...
             { picker.launch("*/*") },
             Modifier.fillMaxWidth(),
             style = AtButtonStyle.Soft,
-            leadingIcon = if (pending == null) Icons.Rounded.AttachFile else Icons.Rounded.SwapHoriz,
+            leadingIcon = Icons.Rounded.AttachFile,
             loading = loading
         )
-        if (pending == null) {
-            Text(
-                "Qualquer arquivo: foto, PDF, XML da nota fiscal...",
-                style = MaterialTheme.typography.bodySmall,
-                color = AtColors.Muted
-            )
+        Text(
+            if (pending.isEmpty()) "Pode escolher vários arquivos de uma vez: fotos, PDF, XML da nota fiscal..."
+            else "${pending.size} ${if (pending.size == 1) "arquivo anexado" else "arquivos anexados"}",
+            style = MaterialTheme.typography.bodySmall,
+            color = AtColors.Muted
+        )
+    }
+}
+
+/**
+ * Botão de comprovante nas listas de histórico: com um arquivo, abre direto; com vários,
+ * mostra a lista para o usuário escolher qual abrir.
+ */
+@Composable
+fun ReceiptOpenButton(raw: String?) {
+    val paths = ReceiptPaths.split(raw)
+    if (paths.isEmpty()) return
+    val context = LocalContext.current
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { if (paths.size == 1) ReceiptFileStore.open(context, paths[0]) else open = true }) {
+            BadgedBox(badge = { if (paths.size > 1) Badge { Text("${paths.size}") } }) {
+                Icon(Icons.Rounded.AttachFile, "Abrir comprovante", tint = AtColors.Primary)
+            }
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            paths.forEach { path ->
+                DropdownMenuItem(
+                    text = { Text(File(path).name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    leadingIcon = { Icon(Icons.Rounded.Description, null, tint = AtColors.Primary) },
+                    onClick = {
+                        open = false
+                        ReceiptFileStore.open(context, path)
+                    }
+                )
+            }
         }
     }
 }

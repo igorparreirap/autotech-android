@@ -25,7 +25,7 @@ data class PendingReceipt(
 )
 
 /**
- * Comprovantes (RF-04 / RF-05): aceita QUALQUER tipo de arquivo (foto, PDF, XML da nota
+ * Comprovantes (RF-04 / RF-05): aceita QUALQUER tipo de arquivo, e vários por registro (foto, PDF, XML da nota
  * fiscal...). Os arquivos ficam na área interna do app, em files/comprovantes, com nome
  * padronizado: Tipo_Veiculo-Placa_Item_AAAA-MM-DD.ext
  * Ex.: Manutencao_Gol-ABC1D23_Oleo-filtro_2026-10-21.pdf
@@ -79,6 +79,18 @@ object ReceiptFileStore {
             n++
         }
         return if (src.renameTo(target)) target.absolutePath else null
+    }
+
+    /**
+     * Guarda vários comprovantes de uma vez, na ordem escolhida: o primeiro com o nome padronizado,
+     * os seguintes com _2, _3... Devolve o caminho final de cada um junto com o arquivo de origem.
+     */
+    fun finalizeAll(context: Context, pending: List<PendingReceipt>, baseName: String): List<Pair<String, PendingReceipt>> =
+        pending.mapNotNull { p -> finalize(context, p, baseName)?.let { it to p } }
+
+    /** Desfaz o [finalizeAll] (usado se o registro não puder ser salvo). */
+    fun revertAll(saved: List<Pair<String, PendingReceipt>>) {
+        saved.forEach { (path, p) -> revert(path, p) }
     }
 
     /** Desfaz o finalize (usado se o registro não puder ser salvo). */
