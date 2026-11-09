@@ -37,6 +37,7 @@ object MaintenanceCatalog {
     val categories: List<MaintenanceCategory> = listOf(
         MaintenanceCategory("motor", "Motor"),
         MaintenanceCategory("cambio", "Câmbio e embreagem"),
+        MaintenanceCategory("escapamento", "Escapamento"),
         MaintenanceCategory("freios", "Freios"),
         MaintenanceCategory("suspensao", "Suspensão e direção"),
         MaintenanceCategory("pneus", "Pneus e rodas"),
@@ -83,6 +84,15 @@ object MaintenanceCatalog {
         MaintenanceItem("cv_joint", "Junta homocinética", "cambio"),
         MaintenanceItem("cv_boot", "Coifa da homocinética", "cambio"),
         MaintenanceItem("diff_oil", "Óleo do diferencial", "cambio"),
+        // ── Escapamento
+        MaintenanceItem("exhaust_rear", "Silencioso traseiro do escapamento (ponteira)", "escapamento", main = true),
+        MaintenanceItem("exhaust_mid", "Silencioso intermediário do escapamento", "escapamento", main = true),
+        MaintenanceItem("catalyst", "Catalisador", "escapamento", main = true),
+        MaintenanceItem("exhaust_full", "Escapamento completo", "escapamento", main = true),
+        MaintenanceItem("exhaust_flex", "Flexível do escapamento", "escapamento"),
+        MaintenanceItem("exhaust_mounts", "Coxins e abraçadeiras do escapamento", "escapamento"),
+        MaintenanceItem("exhaust_manifold", "Coletor de escapamento", "escapamento"),
+        MaintenanceItem("dpf", "Filtro de partículas (DPF)", "escapamento", fuels = DIESEL),
         // ── Freios
         MaintenanceItem("brake", "Revisão dos freios", "freios", main = true),
         MaintenanceItem("brake_pads_front", "Pastilhas de freio dianteiras", "freios", main = true),

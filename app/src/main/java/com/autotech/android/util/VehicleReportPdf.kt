@@ -32,6 +32,7 @@ import com.autotech.android.domain.FuelConsumption
 import com.autotech.android.domain.FuelMix
 import com.autotech.android.domain.FuelType
 import com.autotech.android.domain.MaintenanceCatalog
+import com.autotech.android.domain.ReceiptPaths
 import com.autotech.android.domain.VehicleNaming
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -48,7 +49,8 @@ import kotlin.math.min
  * RF-10: relatório do veículo em PDF com a identidade visual do aplicativo
  * (fundo cinza-azulado, cartões brancos, faixa azul com logo e nome do AutoTech).
  * Ordem: dados do veículo e odômetro, manutenções, abastecimentos (opcional) e
- * comprovantes anexados (opcional).
+ * comprovantes anexados (opcional). As fotos dos comprovantes entram reduzidas, quatro por
+ * linha no formato 16:9, agrupadas pelo registro a que pertencem; PDFs entram como páginas.
  */
 object VehicleReportPdf {
 
@@ -57,7 +59,7 @@ object VehicleReportPdf {
     private const val PREFIX = "Relatorio_AutoTech_"
 
     /** Muda quando o desenho do PDF mudar, para que relatórios antigos sejam refeitos. */
-    private const val LAYOUT_VERSION = 1
+    private const val LAYOUT_VERSION = 2
 
     private fun prefs(context: Context) = context.getSharedPreferences("autotech_reports", Context.MODE_PRIVATE)
 
@@ -85,7 +87,8 @@ object VehicleReportPdf {
         if (options.includeFuel) fuel.forEach { sb.append(it).append('|') }
         VehiclePhotoStore.file(context, vehicle.id).takeIf { it.exists() }?.let { sb.append("foto:${it.length()}:${it.lastModified()}|") }
         if (options.includeReceipts) {
-            val paths = maintenance.mapNotNull { it.receiptPath } + if (options.includeFuel) fuel.mapNotNull { it.receiptPath } else emptyList()
+            val paths = maintenance.flatMap { ReceiptPaths.split(it.receiptPath) } +
+                if (options.includeFuel) fuel.flatMap { ReceiptPaths.split(it.receiptPath) } else emptyList()
             paths.forEach { p -> val f = File(p); sb.append("r:$p:${f.length()}:${f.lastModified()}|") }
         }
         val digest = java.security.MessageDigest.getInstance("SHA-1").digest(sb.toString().toByteArray())
@@ -239,7 +242,7 @@ private class ReportBuilder(
         val title: String,
         val dateMillis: Long,
         val km: Long,
-        val path: String
+        val paths: List<String>
     )
 
     fun build(maintenance: List<MaintenanceRecordEntity>, fuel: List<FuelRecordEntity>): PdfDocument {
@@ -248,15 +251,19 @@ private class ReportBuilder(
         val maintenanceAttach = mutableMapOf<Long, Int>()
         val fuelAttach = mutableMapOf<Long, Int>()
         if (options.includeReceipts) {
-            maintenance.filter { !it.receiptPath.isNullOrBlank() }.forEach { r ->
+            maintenance.forEach { r ->
+                val paths = ReceiptPaths.split(r.receiptPath)
+                if (paths.isEmpty()) return@forEach
                 val n = attachments.size + 1
                 maintenanceAttach[r.id] = n
-                attachments += Attachment(n, "Manutenção", MaintenanceCatalog.label(r.itemKey), r.eventDateMillis, r.eventKm, r.receiptPath!!)
+                attachments += Attachment(n, "Manutenção", MaintenanceCatalog.label(r.itemKey), r.eventDateMillis, r.eventKm, paths)
             }
-            fuel.filter { !it.receiptPath.isNullOrBlank() }.forEach { f ->
+            fuel.forEach { f ->
+                val paths = ReceiptPaths.split(f.receiptPath)
+                if (paths.isEmpty()) return@forEach
                 val n = attachments.size + 1
                 fuelAttach[f.id] = n
-                attachments += Attachment(n, "Abastecimento", "${decimal.format(f.liters)} L", f.dateMillis, f.eventKm, f.receiptPath!!)
+                attachments += Attachment(n, "Abastecimento", "${decimal.format(f.liters)} L", f.dateMillis, f.eventKm, paths)
             }
         }
 
@@ -285,7 +292,10 @@ private class ReportBuilder(
                 section("Comprovantes", "nenhum anexo")
                 notice("Nenhum comprovante foi anexado aos registros incluídos neste relatório.")
             } else {
-                attachments.forEachIndexed { i, a -> attachmentPages(a, first = i == 0, total = attachments.size) }
+                newPage()
+                val files = attachments.sumOf { it.paths.size }
+                section("Comprovantes", "${attachments.size} ${if (attachments.size == 1) "registro" else "registros"} · $files ${if (files == 1) "arquivo" else "arquivos"}")
+                attachments.forEach { attachmentGroup(it) }
             }
         }
 
@@ -562,38 +572,86 @@ private class ReportBuilder(
 
     // ─── Comprovantes ────────────────────────────────────────────────────────
 
-    private fun attachmentPages(a: Attachment, first: Boolean, total: Int) {
-        newPage()
-        if (first) section("Comprovantes", "$total ${if (total == 1) "anexo" else "anexos"}")
-        attachmentHeader(a, null)
-        val file = File(a.path)
-        val ext = file.extension.lowercase(Locale.ROOT)
-        when {
-            !file.exists() -> notice("O arquivo deste comprovante não foi encontrado no aparelho.")
-            ext == "pdf" -> drawPdfReceipt(a, file)
-            ext in IMAGE_EXT -> {
-                val bmp = decodeImage(file, 1400)
-                if (bmp == null) notice("Não foi possível ler a imagem deste comprovante.")
-                else { drawFit(bmp); bmp.recycle() }
+    /**
+     * Comprovantes de um registro: fotos reduzidas em grade (4 por linha, 16:9), para o relatório não
+     * crescer com cada foto; PDFs em páginas inteiras; outros tipos, só listados pelo nome.
+     */
+    private fun attachmentGroup(a: Attachment) {
+        val files = a.paths.map(::File)
+        val images = files.filter { it.exists() && it.extension.lowercase(Locale.ROOT) in IMAGE_EXT }
+        val pdfs = files.filter { it.exists() && it.extension.lowercase(Locale.ROOT) == "pdf" }
+        val missing = files.filterNot { it.exists() }
+        val others = files.filter { it.exists() && it !in images && it !in pdfs }
+
+        ensure(HEADER_H + 10f + gridRowH() + 2 * GRID_PAD)
+        attachmentHeader(a, "${files.size} ${if (files.size == 1) "arquivo" else "arquivos"}", null)
+        if (images.isNotEmpty()) imageGrid(images)
+        if (others.isNotEmpty()) notice(
+            "Arquivos que não podem ser exibidos no PDF (continuam guardados no aplicativo): " +
+                others.joinToString(", ") { it.name } + "."
+        )
+        if (missing.isNotEmpty()) notice("Arquivos não encontrados no aparelho: " + missing.joinToString(", ") { it.name } + ".")
+        pdfs.forEach { f ->
+            newPage()
+            attachmentHeader(a, null, f.name)
+            drawPdfReceipt(a, f)
+        }
+        y += 4f
+    }
+
+    private fun gridCellW(): Float = (cw - 2 * GRID_PAD - (GRID_COLS - 1) * GRID_GAP) / GRID_COLS
+    private fun gridRowH(): Float = gridCellW() * 9f / 16f
+
+    /** Fotos inteiras (sem cortes) dentro de células 16:9, quatro por linha; quebra de página entre linhas. */
+    private fun imageGrid(images: List<File>) {
+        val cellW = gridCellW()
+        val cellH = gridRowH()
+        val rows = images.chunked(GRID_COLS)
+        var r = 0
+        while (r < rows.size) {
+            val fit = ((bottom - y - 2 * GRID_PAD + GRID_GAP) / (cellH + GRID_GAP)).toInt()
+            if (fit < 1) { newPage(); continue }
+            val take = min(fit, rows.size - r)
+            val h = 2 * GRID_PAD + take * cellH + (take - 1) * GRID_GAP
+            card(y, h, 14f)
+            for (k in 0 until take) {
+                rows[r + k].forEachIndexed { col, f ->
+                    val left = m + GRID_PAD + col * (cellW + GRID_GAP)
+                    val top = y + GRID_PAD + k * (cellH + GRID_GAP)
+                    val cell = RectF(left, top, left + cellW, top + cellH)
+                    round(cell, field, 8f)
+                    val bmp = decodeImage(f, 480)
+                    if (bmp == null) {
+                        c.drawText("Imagem ilegível", cell.centerX(), cell.centerY() + 3f, text(7f, muted, align = Paint.Align.CENTER))
+                    } else {
+                        val scale = min(cellW / bmp.width, cellH / bmp.height)
+                        val w = bmp.width * scale
+                        val hh = bmp.height * scale
+                        val dst = RectF(cell.centerX() - w / 2, cell.centerY() - hh / 2, cell.centerX() + w / 2, cell.centerY() + hh / 2)
+                        c.save()
+                        c.clipPath(Path().apply { addRoundRect(cell, 8f, 8f, Path.Direction.CW) })
+                        c.drawBitmap(bmp, null, dst, bitmapPaint)
+                        c.restore()
+                        bmp.recycle()
+                    }
+                }
             }
-            else -> notice(
-                "Arquivos do tipo .${ext.uppercase(Locale.ROOT).ifEmpty { "?" }} não podem ser exibidos dentro do PDF. " +
-                    "O comprovante continua guardado no aplicativo com o nome ${file.name}."
-            )
+            y += h + 8f
+            r += take
         }
     }
 
-    private fun attachmentHeader(a: Attachment, pageInfo: String?) {
-        val h = 54f
+    private fun attachmentHeader(a: Attachment, info: String?, fileName: String?) {
+        val h = HEADER_H
         card(y, h, 14f)
         val chipW = 64f
         round(RectF(m + 12f, y + 13f, m + 12f + chipW, y + 41f), primary, 10f)
         c.drawText("Anexo ${a.number}", m + 12f + chipW / 2, y + 31f, text(9.5f, white, bold = true, align = Paint.Align.CENTER))
         val tx = m + 12f + chipW + 12f
         val tw = right - 12f - tx
-        c.drawText(ellipsize("${a.kind} · ${a.title}" + (pageInfo?.let { " · $it" } ?: ""), text(11f, ink, bold = true), tw), tx, y + 24f, text(11f, ink, bold = true))
+        c.drawText(ellipsize("${a.kind} · ${a.title}" + (info?.let { " · $it" } ?: ""), text(11f, ink, bold = true), tw), tx, y + 24f, text(11f, ink, bold = true))
         c.drawText(
-            ellipsize("${dateFmt.format(Date(a.dateMillis))} · ${number.format(a.km)} km · ${File(a.path).name}", text(8.5f, muted), tw),
+            ellipsize("${dateFmt.format(Date(a.dateMillis))} · ${number.format(a.km)} km" + (fileName?.let { " · $it" } ?: ""), text(8.5f, muted), tw),
             tx, y + 39f, text(8.5f, muted)
         )
         y += h + 10f
@@ -608,7 +666,7 @@ private class ReportBuilder(
                     for (i in 0 until count) {
                         if (i > 0) {
                             newPage()
-                            attachmentHeader(a, "página ${i + 1} de ${renderer.pageCount}")
+                            attachmentHeader(a, "página ${i + 1} de ${renderer.pageCount}", file.name)
                         }
                         val p = renderer.openPage(i)
                         val w = 1100
@@ -786,5 +844,9 @@ private class ReportBuilder(
     private companion object {
         val IMAGE_EXT = setOf("jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif")
         const val MAX_RECEIPT_PAGES = 20
+        const val GRID_COLS = 4
+        const val GRID_GAP = 8f
+        const val GRID_PAD = 10f
+        const val HEADER_H = 54f
     }
 }

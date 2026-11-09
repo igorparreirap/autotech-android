@@ -28,6 +28,7 @@ data class MaintenanceRecordEntity(
     val vehicleKmAtRecord: Long,
     val amount: Double?,
     val description: String?,
+    /** RF-04: caminhos dos comprovantes, um por linha (ver ReceiptPaths); null quando não há anexo. */
     val receiptPath: String?,
     /** RF-04: data em que o registro foi lançado no app. */
     @ColumnInfo(defaultValue = "0") val registeredAtMillis: Long = 0,

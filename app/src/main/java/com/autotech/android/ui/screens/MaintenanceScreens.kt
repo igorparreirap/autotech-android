@@ -12,7 +12,9 @@ import com.autotech.android.ui.components.shortName
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.LaunchedEffect
 import com.autotech.android.ui.components.AtCheckRow
-import com.autotech.android.ui.components.ReceiptAttachment
+import com.autotech.android.ui.components.ReceiptAttachments
+import com.autotech.android.ui.components.ReceiptOpenButton
+import com.autotech.android.domain.ReceiptPaths
 import com.autotech.android.util.PendingReceipt
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -243,11 +245,7 @@ fun MaintenanceListScreen(
                             icon = maintenanceIcon(r.itemKey),
                             trailing = {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    r.receiptPath?.let { path ->
-                                        IconButton(onClick = { ReceiptFileStore.open(context, path) }) {
-                                            Icon(Icons.Rounded.AttachFile, "Abrir comprovante", tint = AtColors.Primary)
-                                        }
-                                    }
+                                    ReceiptOpenButton(r.receiptPath)
                                     Text(
                                         r.amount?.let { formatMoney(it) } ?: "—",
                                         style = MaterialTheme.typography.titleSmall
@@ -293,8 +291,8 @@ fun AddMaintenanceScreen(
     var splitLabor by remember { mutableStateOf(false) }
     var partsValue by remember { mutableStateOf("") }
     var laborValue by remember { mutableStateOf("") }
-    // comprovante escolhido (qualquer tipo de arquivo), guardado de vez ao salvar
-    var pending by remember { mutableStateOf<PendingReceipt?>(null) }
+    // comprovantes escolhidos (qualquer tipo de arquivo, vários), guardados de vez ao salvar
+    var pending by remember { mutableStateOf<List<PendingReceipt>>(emptyList()) }
     // RF-04: só o KM do dia do serviço é obrigatório; marcado como KM atual, ele atualiza o odômetro
     var isCurrent by remember { mutableStateOf(true) }
     val vehicleFlow = remember(vehicleId) { app.graph.vehicleRepository.observeVehicle(vehicleId) }
@@ -374,7 +372,7 @@ fun AddMaintenanceScreen(
             saving = true
             error = null
             val base = ReceiptFileStore.baseName("Manutencao", vehicle?.shortName, vehicle?.plate, MaintenanceCatalog.label(key), eventDate)
-            val receiptPath = pending?.let { ReceiptFileStore.finalize(context, it, base) }
+            val saved = ReceiptFileStore.finalizeAll(context, pending, base)
             val record = MaintenanceRecordEntity(
                 vehicleId = vehicleId,
                 itemKey = key,
@@ -385,7 +383,7 @@ fun AddMaintenanceScreen(
                 amount = am,
                 laborAmount = labor,
                 description = description.ifBlank { null },
-                receiptPath = receiptPath
+                receiptPath = ReceiptPaths.join(saved.map { it.first })
             )
             app.graph.maintenanceRepository.addRecord(record, updateVehicleOdometerTo = typedCurrent)
                 .onSuccess { maintId ->
@@ -425,7 +423,7 @@ fun AddMaintenanceScreen(
                 }
                 .onFailure {
                     // o registro não foi salvo: o arquivo volta para a área de espera
-                    receiptPath?.let { path -> pending?.let { pr -> ReceiptFileStore.revert(path, pr) } }
+                    ReceiptFileStore.revertAll(saved)
                     error = it.message
                 }
             saving = false
@@ -610,7 +608,7 @@ fun AddMaintenanceScreen(
                         )
                     }
                     AtField(description, { description = it }, "Descrição", singleLine = false)
-                    ReceiptAttachment(
+                    ReceiptAttachments(
                         pending = pending,
                         onChange = { pending = it },
                         finalBaseName = ReceiptFileStore.baseName("Manutencao", vehicle?.shortName, vehicle?.plate, itemKey?.let { MaintenanceCatalog.label(it) } ?: "Item", eventDate)

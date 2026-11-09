@@ -33,8 +33,8 @@ class VehicleRepository(
      */
     suspend fun deleteVehicle(vehicleId: Long, deleteHistory: Boolean): Result<Unit> = runCatching {
         if (deleteHistory) {
-            val receipts = maintenanceDao.listByVehicle(vehicleId).mapNotNull { it.receiptPath } +
-                fuelDao.listByVehicle(vehicleId).mapNotNull { it.receiptPath }
+            val receipts = maintenanceDao.listByVehicle(vehicleId).flatMap { com.autotech.android.domain.ReceiptPaths.split(it.receiptPath) } +
+                fuelDao.listByVehicle(vehicleId).flatMap { com.autotech.android.domain.ReceiptPaths.split(it.receiptPath) }
             vehicleDao.deleteById(vehicleId)
             receipts.forEach { runCatching { File(it).delete() } }
         } else {

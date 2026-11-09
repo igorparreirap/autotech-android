@@ -11,8 +11,8 @@ class CatalogoManutencaoTest {
     private val C = MaintenanceCatalog
 
     @Test
-    fun `catalogo tem 10 partes do carro`() {
-        assertEquals(10, C.categories.size)
+    fun `catalogo tem 11 partes do carro`() {
+        assertEquals(11, C.categories.size)
     }
 
     @Test
@@ -101,5 +101,17 @@ class CatalogoManutencaoTest {
     @Test
     fun `busca respeita o combustivel`() {
         assertEquals(listOf("glow_plugs"), C.search("vela", FuelType.DIESEL).map { it.key })
+    }
+
+    @Test
+    fun `escapamento tem a parte final e a busca o encontra`() {
+        assertTrue(C.mainItems("escapamento", FuelType.FLEX).any { it.key == "exhaust_rear" })
+        assertTrue(C.search("escapamento", null).size >= 4)
+    }
+
+    @Test
+    fun `filtro de particulas so aparece no diesel`() {
+        assertTrue(C.visibleItems("escapamento", FuelType.DIESEL).any { it.key == "dpf" })
+        assertTrue(C.visibleItems("escapamento", FuelType.FLEX).none { it.key == "dpf" })
     }
 }

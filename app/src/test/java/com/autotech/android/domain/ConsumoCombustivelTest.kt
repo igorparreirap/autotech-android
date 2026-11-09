@@ -5,7 +5,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** CT04: cálculo de consumo pelo método tanque a tanque (RF-05). */
+/** CT04: abastecimento (RF-05): combustível informado, consumo tanque a tanque e comprovantes. */
 class ConsumoCombustivelTest {
 
     private val d = 1_000L
@@ -105,5 +105,74 @@ class ConsumoCombustivelTest {
     @Test
     fun `sem periodos nao ha media`() {
         assertNull(FuelConsumption.summarize(emptyList()).overall)
+    }
+
+    // ── Combustível do abastecimento flex e vários comprovantes por registro
+
+    @Test
+    fun `flex sem escolher o combustivel e recusado`() {
+        val r = FuelEntry.liters(true, null, 40.0, null, null)
+        assertTrue(r.isFailure)
+        assertEquals("Escolha o combustível: etanol, gasolina ou os dois.", r.exceptionOrNull()?.message)
+    }
+
+    @Test
+    fun `flex so com etanol grava os litros como etanol`() {
+        val l = FuelEntry.liters(true, FuelChoice.ETHANOL, 42.5, null, null).getOrThrow()
+        assertEquals(42.5, l.total, 0.001)
+        assertEquals(42.5, l.ethanol!!, 0.001)
+        assertNull(l.gasoline)
+    }
+
+    @Test
+    fun `flex so com gasolina grava os litros como gasolina`() {
+        val l = FuelEntry.liters(true, FuelChoice.GASOLINE, 30.0, null, null).getOrThrow()
+        assertEquals(30.0, l.gasoline!!, 0.001)
+        assertNull(l.ethanol)
+        assertEquals(FuelMix.GASOLINE, FuelConsumption.mixOf(l.ethanol, l.gasoline))
+    }
+
+    @Test
+    fun `flex com os dois soma etanol e gasolina`() {
+        val l = FuelEntry.liters(true, FuelChoice.BOTH, null, 20.0, 15.0).getOrThrow()
+        assertEquals(35.0, l.total, 0.001)
+        assertEquals(FuelMix.MIXED, FuelConsumption.mixOf(l.ethanol, l.gasoline))
+    }
+
+    @Test
+    fun `flex com os dois exige os litros de cada combustivel`() {
+        assertTrue(FuelEntry.liters(true, FuelChoice.BOTH, null, 20.0, null).isFailure)
+    }
+
+    @Test
+    fun `veiculo nao flex usa so o total`() {
+        val l = FuelEntry.liters(false, null, 50.0, null, null).getOrThrow()
+        assertEquals(50.0, l.total, 0.001)
+        assertNull(l.ethanol)
+        assertNull(l.gasoline)
+    }
+
+    @Test
+    fun `litros zerados sao recusados`() {
+        assertTrue(FuelEntry.liters(true, FuelChoice.ETHANOL, 0.0, null, null).isFailure)
+        assertTrue(FuelEntry.liters(false, null, null, null, null).isFailure)
+    }
+
+    @Test
+    fun `varios comprovantes ficam no mesmo campo e voltam na mesma ordem`() {
+        val raw = ReceiptPaths.join(listOf("/a/bomba.jpg", "/a/painel.jpg", "/a/nota.pdf"))
+        assertEquals(listOf("/a/bomba.jpg", "/a/painel.jpg", "/a/nota.pdf"), ReceiptPaths.split(raw))
+        assertEquals(3, ReceiptPaths.count(raw))
+    }
+
+    @Test
+    fun `registro antigo com um so comprovante continua valido`() {
+        assertEquals(listOf("/a/antigo.jpg"), ReceiptPaths.split("/a/antigo.jpg"))
+    }
+
+    @Test
+    fun `sem comprovante o campo fica vazio`() {
+        assertNull(ReceiptPaths.join(emptyList()))
+        assertEquals(0, ReceiptPaths.count(null))
     }
 }
