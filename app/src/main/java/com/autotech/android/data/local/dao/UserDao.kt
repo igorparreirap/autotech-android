@@ -20,4 +20,8 @@ interface UserDao {
     /** RF-01: nova senha (já em hash) após a recuperação por e-mail. */
     @Query("UPDATE users SET passwordHash = :hash WHERE id = :id")
     suspend fun updatePassword(id: Long, hash: String)
+
+    /** Carga de teste (somente depuração): troca o e-mail da conta de teste quando ele muda no local.properties. */
+    @Query("UPDATE users SET email = :email WHERE id = :id")
+    suspend fun updateEmail(id: Long, email: String)
 }
