@@ -32,6 +32,10 @@ interface VehicleDao {
     @Query("SELECT * FROM vehicles WHERE userId = :userId ORDER BY id DESC")
     suspend fun listAllByUser(userId: Long): List<VehicleEntity>
 
+    /** Carga de teste: dono do veículo fictício, para reaproveitar a conta quando o e-mail muda. */
+    @Query("SELECT userId FROM vehicles WHERE plate = :plate ORDER BY id LIMIT 1")
+    suspend fun findOwnerByPlate(plate: String): Long?
+
     @Query("SELECT * FROM vehicles WHERE userId = :userId AND plate = :plate LIMIT 1")
     suspend fun findByUserAndPlate(userId: Long, plate: String): VehicleEntity?
 

@@ -43,6 +43,7 @@ object DebugSeed {
         val password = BuildConfig.SEED_PASSWORD
         val name = BuildConfig.SEED_NAME.ifBlank { "Usuário de teste" }
         val uid = g.authRepository.login(email, password).getOrNull()
+            ?: reuseSeedAccount(app, email, password)
             ?: g.authRepository.register(email, password, name).getOrThrow()
 
         app.database.plateLookupCacheDao().upsert(
@@ -157,6 +158,18 @@ object DebugSeed {
         for (e in events.sortedBy { it.at }) e.run(vid)
         g.vehicleRepository.updateOdometer(vid, kmNow)
         uid
+    }
+
+    /**
+     * Se o e-mail da conta de teste mudou no local.properties, a conta que já tem o veículo fictício
+     * passa a usar o novo e-mail, com todo o histórico, em vez de uma conta nova e vazia.
+     */
+    private suspend fun reuseSeedAccount(app: AutoTechApplication, email: String, password: String): Long? {
+        val db = app.database
+        val owner = db.vehicleDao().findOwnerByPlate(PLATE) ?: return null
+        if (db.userDao().getByEmail(email.lowercase()) != null) return null
+        db.userDao().updateEmail(owner, email.lowercase())
+        return app.graph.authRepository.login(email, password).getOrNull() ?: owner
     }
 
     private fun round2(v: Double) = (v * 100).roundToLong() / 100.0
