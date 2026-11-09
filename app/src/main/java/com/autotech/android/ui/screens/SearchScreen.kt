@@ -95,7 +95,7 @@ private val FEATURES = listOf(
         "abastecimento abastecimentos combustivel gasolina alcool etanol litros posto", true) { NavRoutes.fuelList(it!!) },
     AppFeature("Novo abastecimento", "Registrar um abastecimento", Icons.Rounded.Add,
         "novo abastecimento registrar abastecer lancar combustivel", true) { NavRoutes.fuelAdd(it!!) },
-    AppFeature("Calculadora álcool ou gasolina", "Qual combustível compensa hoje", Icons.Rounded.Calculate,
+    AppFeature("Calculadora etanol ou gasolina", "Qual combustível compensa hoje", Icons.Rounded.Calculate,
         "calculadora alcool gasolina etanol compensa 70 preco comparar", true) { NavRoutes.fuelList(it!!) },
     AppFeature("Veículos", "Todos os seus veículos", Icons.Rounded.DirectionsCar,
         "veiculos carros lista garagem", false) { NavRoutes.VEHICLES },

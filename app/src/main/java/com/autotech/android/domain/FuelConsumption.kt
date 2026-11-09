@@ -42,7 +42,7 @@ data class ConsumptionSummary(
     val gasoline: Double?,
     val periods: Int
 ) {
-    /** Quanto o álcool rende em relação à gasolina, com os dados do próprio veículo (ex.: 0,72). */
+    /** Quanto o etanol rende em relação à gasolina, com os dados do próprio veículo (ex.: 0,72). */
     val ethanolVsGasoline: Double? get() = if (ethanol != null && gasoline != null && gasoline > 0) ethanol / gasoline else null
 }
 

@@ -161,4 +161,16 @@ class AvisosManutencaoTest {
     fun `oleo marcado como Ja fiz deixa so o freio avisar`() {
         assertEquals(listOf("brake"), ReminderSchedule.due(20_500, pendentes, now, skipItems = setOf("oil")).map { it.itemKey })
     }
+
+    @Test
+    fun `lembretes ficam ocultos fora das etapas de aviso`() {
+        val longe = listOf(CycleInput("oil", 10_000, null, 50_000, now))
+        assertTrue(HomeHighlights.reminderKeys(51_000, longe, now).isEmpty())
+    }
+
+    @Test
+    fun `lembrete aparece quando o motor de notificacoes avisaria`() {
+        val perto = listOf(CycleInput("oil", 10_000, null, 50_000, now), CycleInput("brake", 20_000, null, 50_000, now))
+        assertEquals(setOf("oil"), HomeHighlights.reminderKeys(59_600, perto, now))
+    }
 }

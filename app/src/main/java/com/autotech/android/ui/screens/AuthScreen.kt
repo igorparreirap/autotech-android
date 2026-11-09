@@ -5,9 +5,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -179,22 +177,6 @@ fun AuthScreen(onSignedIn: () -> Unit, onForgotPassword: (String) -> Unit = {}) 
                 AtLogo(42.dp)
                 Spacer(Modifier.width(10.dp))
                 Text("AutoTech", style = MaterialTheme.typography.titleLarge)
-                Spacer(Modifier.weight(1f))
-                Box(
-                    Modifier
-                        .background(AtColors.Card, CircleShape)
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            Modifier
-                                .padding(end = 6.dp)
-                                .background(AtColors.Accent, CircleShape)
-                                .padding(4.dp)
-                        )
-                        Text("Offline-first", style = MaterialTheme.typography.labelMedium)
-                    }
-                }
             }
         }
 

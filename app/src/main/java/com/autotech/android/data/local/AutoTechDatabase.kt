@@ -65,7 +65,7 @@ abstract class AutoTechDatabase : RoomDatabase() {
             }
         }
 
-        /** v6 -> v7: litros de álcool/gasolina e cálculo de consumo no abastecimento (RF-05). */
+        /** v6 -> v7: litros de etanol/gasolina e cálculo de consumo no abastecimento (RF-05). */
         val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE fuel_records ADD COLUMN ethanolLiters REAL")

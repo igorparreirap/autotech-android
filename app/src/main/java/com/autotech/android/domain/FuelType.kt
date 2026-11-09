@@ -7,10 +7,10 @@ import java.util.Locale
  * RF-03: combustível do veículo, escolhido no cadastro. Veículos 100% elétricos não
  * são atendidos, pois o aplicativo controla abastecimento em litros.
  * No banco fica gravado o nome da constante (ex.: "FLEX"); textos antigos vindos da
- * consulta da placa (ex.: "ALCOOL / GASOLINA") continuam sendo reconhecidos.
+ * consulta da placa (ex.: "ALCOOL / GASOLINA", como a API ainda escreve) continuam sendo reconhecidos.
  */
 enum class FuelType(val label: String, val hint: String) {
-    FLEX("Flex", "Álcool e gasolina"),
+    FLEX("Flex", "Etanol e gasolina"),
     GASOLINE("Gasolina", "Só gasolina"),
     DIESEL("Diesel", "Diesel S10 ou S500"),
     HYBRID("Híbrido", "Combustão + elétrico");
