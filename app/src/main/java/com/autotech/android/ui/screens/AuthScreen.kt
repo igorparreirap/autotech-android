@@ -6,6 +6,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import com.autotech.android.util.DebugSeed
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -70,6 +74,7 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AuthScreen(onSignedIn: () -> Unit, onForgotPassword: (String) -> Unit = {}) {
     val context = LocalContext.current
@@ -174,7 +179,21 @@ fun AuthScreen(onSignedIn: () -> Unit, onForgotPassword: (String) -> Unit = {}) 
                     .padding(top = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                AtLogo(42.dp)
+                // Build de depuração: o toque longo no logo carrega a conta e os dados de teste (util/DebugSeed)
+                Box(
+                    Modifier.combinedClickable(
+                        onClick = {},
+                        onLongClick = {
+                            if (DebugSeed.enabled && !loading) scope.launch {
+                                loading = true
+                                DebugSeed.run(app)
+                                    .onSuccess { id -> app.setSession(id); AlertScheduler.enqueuePeriodic(app); onSignedIn() }
+                                    .onFailure { error = "Carga de teste: " + (it.message ?: "erro") }
+                                loading = false
+                            }
+                        }
+                    )
+                ) { AtLogo(42.dp) }
                 Spacer(Modifier.width(10.dp))
                 Text("AutoTech", style = MaterialTheme.typography.titleLarge)
             }

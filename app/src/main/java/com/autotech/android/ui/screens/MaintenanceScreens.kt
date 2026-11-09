@@ -276,7 +276,9 @@ fun AddMaintenanceScreen(
     val context = LocalContext.current
     val app = context.applicationContext as AutoTechApplication
     val scope = rememberCoroutineScope()
-    var itemKey by remember { mutableStateOf<String?>(null) }
+    // RF-04: itens marcados no seletor; o primeiro é o registro principal (valor e comprovante)
+    var selectedKeys by remember { mutableStateOf(listOf<String>()) }
+    val itemKey = selectedKeys.firstOrNull()
     // itens próprios já criados pelo usuário neste veículo (RF-04)
     val recordsFlow = remember(vehicleId) { app.graph.maintenanceRepository.observeRecords(vehicleId) }
     val existingRecords by recordsFlow.collectAsState(initial = emptyList())
@@ -317,12 +319,14 @@ fun AddMaintenanceScreen(
             a.get(java.util.Calendar.DAY_OF_YEAR) == b.get(java.util.Calendar.DAY_OF_YEAR)
     }
 
-    // RF-04 / RF-11: vários itens no mesmo registro, tanto na revisão quanto numa manutenção avulsa
-    // (várias peças ou serviços no mesmo comprovante); intervalo em comum (junção) ou próprio (separação)
+    // RF-04 / RF-11: vários itens no mesmo registro. Na revisão, os itens verificados vêm da lista da
+    // revisão; numa manutenção avulsa, dos demais itens marcados no seletor (mesmo comprovante).
+    // Intervalo em comum (junção) ou próprio (separação).
     val isReview = itemKey in MaintenanceCatalog.REVIEW_KEYS
     var reviewItems by remember { mutableStateOf(listOf<String>()) }
     var ownInterval by remember { mutableStateOf(mapOf<String, Pair<String, String>>()) }
-    LaunchedEffect(isReview) { reviewItems = emptyList(); ownInterval = emptyMap() }
+    LaunchedEffect(isReview) { reviewItems = emptyList() }
+    val extraItems = if (isReview) reviewItems else selectedKeys.drop(1)
     var groupKm by remember { mutableStateOf("") }
     var groupMonths by remember { mutableStateOf("") }
     var addQuery by remember { mutableStateOf("") }
@@ -333,7 +337,7 @@ fun AddMaintenanceScreen(
     LaunchedEffect(pendingId) {
         if (pendingId <= 0) return@LaunchedEffect
         val p = app.graph.maintenanceRepository.getPending(pendingId) ?: return@LaunchedEffect
-        itemKey = p.itemKey
+        selectedKeys = listOf(p.itemKey)
         eventDate = p.doneDateMillis
         sameDay = false
         registeredDate = System.currentTimeMillis()
@@ -404,7 +408,7 @@ fun AddMaintenanceScreen(
                             "Feito na ${MaintenanceCatalog.label(key).lowercase(PT_BR)} de $day"
                         else
                             "Feito no mesmo atendimento de ${MaintenanceCatalog.label(key)} em $day"
-                        for (item in reviewItems.filter { it != key }) {
+                        for (item in extraItems.filter { it != key }) {
                             val sub = record.copy(id = 0, itemKey = item, amount = null, laborAmount = null, description = note, receiptPath = null)
                             app.graph.maintenanceRepository.addRecord(sub, updateVehicleOdometerTo = typedCurrent)
                                 .onSuccess { subId ->
@@ -439,21 +443,25 @@ fun AddMaintenanceScreen(
                 AtCardTitle("Serviço", "Escolha a parte do carro e o item")
                 Spacer(Modifier.height(14.dp))
                 MaintenanceItemPicker(
-                    selectedKey = itemKey,
-                    onSelect = { itemKey = it },
+                    selectedKeys = selectedKeys,
+                    onChange = { keys ->
+                        selectedKeys = keys
+                        ownInterval = ownInterval.filterKeys { it in keys || it in reviewItems }
+                    },
                     fuel = vehicle?.fuelType,
                     customKeys = customKeys
                 )
             }
         }
 
-        if (itemKey != null) {
+        if (isReview || extraItems.isNotEmpty()) {
             Reveal(0) {
                 AtCard(Modifier.fillMaxWidth()) {
                     if (isReview) AtCardTitle("Itens da revisão", "Marque o que foi feito ou verificado")
-                    else AtCardTitle("Outros itens do mesmo comprovante", "Opcional · peças ou serviços feitos no mesmo atendimento")
+                    else AtCardTitle("Itens selecionados", "Configure o intervalo de cada item do mesmo comprovante")
                     Spacer(Modifier.height(10.dp))
-                    val suggestions = if (isReview) MaintenanceCatalog.reviewChecklist(vehicle?.fuelType).map { it.key } else emptyList()
+                    if (isReview) {
+                    val suggestions = MaintenanceCatalog.reviewChecklist(vehicle?.fuelType).map { it.key }
                     val extra = reviewItems.filter { it !in suggestions }
                     Column {
                         (suggestions + extra).forEach { k ->
@@ -479,9 +487,10 @@ fun AddMaintenanceScreen(
                                 }
                         }
                     }
-                    if (reviewItems.isNotEmpty()) {
-                        Spacer(Modifier.height(16.dp))
-                        AtLabel("Intervalo em comum dos itens marcados")
+                    }
+                    if (extraItems.isNotEmpty()) {
+                        if (isReview) Spacer(Modifier.height(16.dp))
+                        AtLabel(if (isReview) "Intervalo em comum dos itens marcados" else "Intervalo em comum dos demais itens (o principal usa o alerta abaixo)")
                         Spacer(Modifier.height(8.dp))
                         AtSegmented(listOf("Meses", "Anos"), if (inYears) 1 else 0, { inYears = it == 1 })
                         Spacer(Modifier.height(8.dp))
@@ -496,7 +505,7 @@ fun AddMaintenanceScreen(
                             color = AtColors.Muted
                         )
                         Spacer(Modifier.height(6.dp))
-                        reviewItems.forEach { k ->
+                        extraItems.forEach { k ->
                             val own = ownInterval[k]
                             AtCheckRow("${MaintenanceCatalog.label(k)}: intervalo próprio", own != null) { on ->
                                 ownInterval = if (on) ownInterval + (k to ("" to "")) else ownInterval - k

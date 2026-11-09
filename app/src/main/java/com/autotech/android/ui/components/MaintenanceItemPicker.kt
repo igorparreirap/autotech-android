@@ -15,6 +15,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -38,48 +40,87 @@ import com.autotech.android.ui.theme.AtColors
  * os itens próprios que o usuário já criou e, por último, "Outro" para especificar um serviço novo.
  * Também há uma busca pelo nome em todas as partes. Itens que não valem para o combustível do
  * veículo (ex.: velas de ignição num diesel) não aparecem.
+ *
+ * Seleção múltipla: cada toque marca ou desmarca o item, em qualquer parte do carro, para registrar
+ * de uma vez as peças e os serviços de um mesmo comprovante. O primeiro marcado é o registro principal.
+ * A revisão é exclusiva: ela tem a própria lista de itens verificados.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun MaintenanceItemPicker(
-    selectedKey: String?,
-    onSelect: (String?) -> Unit,
+    selectedKeys: List<String>,
+    onChange: (List<String>) -> Unit,
     fuel: FuelType?,
     customKeys: List<String>
 ) {
     var query by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf(selectedKey?.let { MaintenanceCatalog.categoryOf(it) }) }
+    var category by remember { mutableStateOf(selectedKeys.firstOrNull()?.let { MaintenanceCatalog.categoryOf(it) }) }
     var otherMode by remember { mutableStateOf(false) }
     var customName by remember { mutableStateOf("") }
+    // item próprio sendo digitado agora ("Outro"): troca de chave a cada letra
+    var customCurrent by remember { mutableStateOf<String?>(null) }
 
     // item vindo de fora (ex.: completar uma manutenção marcada como "Já fiz")
-    LaunchedEffect(selectedKey) {
-        val key = selectedKey ?: return@LaunchedEffect
+    LaunchedEffect(selectedKeys.firstOrNull()) {
+        val key = selectedKeys.firstOrNull() ?: return@LaunchedEffect
         if (category == null) category = MaintenanceCatalog.categoryOf(key)
     }
 
-    fun pick(key: String) {
+    fun isOn(key: String) = key in selectedKeys
+
+    /** Marca ou desmarca; a revisão não se mistura com outros itens. */
+    fun toggle(key: String) {
         otherMode = false
         category = MaintenanceCatalog.categoryOf(key) ?: category
-        onSelect(key)
+        val review = MaintenanceCatalog.REVIEW_KEYS
+        onChange(
+            when {
+                key in selectedKeys -> selectedKeys - key
+                key in review -> listOf(key)
+                selectedKeys.any { it in review } -> listOf(key)
+                else -> selectedKeys + key
+            }
+        )
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        selectedKey?.let { key ->
-            Row(
+        if (selectedKeys.isNotEmpty()) {
+            Column(
                 Modifier
                     .fillMaxWidth()
                     .background(AtColors.AccentSoft, RoundedCornerShape(16.dp))
                     .padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Icon(Icons.Rounded.CheckCircle, null, tint = AtColors.Primary, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    "${MaintenanceCatalog.categoryLabel(key)} › ${MaintenanceCatalog.label(key)}",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = AtColors.Primary
-                )
+                if (selectedKeys.size > 1) {
+                    Text("${selectedKeys.size} itens selecionados", style = MaterialTheme.typography.labelMedium, color = AtColors.Primary)
+                }
+                selectedKeys.forEachIndexed { i, key ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.CheckCircle, null, tint = AtColors.Primary, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "${MaintenanceCatalog.categoryLabel(key)} › ${MaintenanceCatalog.label(key)}" + if (i == 0 && selectedKeys.size > 1) " (principal)" else "",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = AtColors.Primary,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Icon(
+                            Icons.Rounded.Close, "Remover",
+                            tint = AtColors.Primary,
+                            modifier = Modifier
+                                .size(18.dp)
+                                .clickable { onChange(selectedKeys - key); if (key == customCurrent) { customCurrent = null; otherMode = false } }
+                        )
+                    }
+                }
+                if (selectedKeys.none { it in MaintenanceCatalog.REVIEW_KEYS }) {
+                    Text(
+                        "Toque em outros itens para registrar tudo o que veio no mesmo comprovante.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AtColors.Muted
+                    )
+                }
             }
         }
 
@@ -97,10 +138,10 @@ fun MaintenanceItemPicker(
             } else {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     found.forEach { item ->
-                        AtChip(item.label, selected = selectedKey == item.key, onClick = { pick(item.key); query = "" }, icon = maintenanceIcon(item.key))
+                        AtChip(item.label, selected = isOn(item.key), onClick = { toggle(item.key); query = "" }, icon = maintenanceIcon(item.key))
                     }
                     foundCustom.forEach { key ->
-                        AtChip(MaintenanceCatalog.label(key), selected = selectedKey == key, onClick = { pick(key); query = "" }, icon = maintenanceIcon(key))
+                        AtChip(MaintenanceCatalog.label(key), selected = isOn(key), onClick = { toggle(key); query = "" }, icon = maintenanceIcon(key))
                     }
                 }
             }
@@ -116,7 +157,6 @@ fun MaintenanceItemPicker(
                         if (category != c.key) {
                             category = c.key
                             otherMode = false
-                            if (selectedKey?.let { MaintenanceCatalog.categoryOf(it) } != c.key) onSelect(null)
                         }
                     },
                     icon = categoryIcon(c.key)
@@ -129,7 +169,7 @@ fun MaintenanceItemPicker(
             AtLabel("Principais")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 MaintenanceCatalog.mainItems(cat, fuel).forEach { item ->
-                    AtChip(item.label, selected = !otherMode && selectedKey == item.key, onClick = { pick(item.key) })
+                    AtChip(item.label, selected = isOn(item.key), onClick = { toggle(item.key) })
                 }
             }
             val others = MaintenanceCatalog.otherItems(cat, fuel)
@@ -137,7 +177,7 @@ fun MaintenanceItemPicker(
                 AtLabel("Todos os itens de $catLabel")
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     others.forEach { item ->
-                        AtChip(item.label, selected = !otherMode && selectedKey == item.key, onClick = { pick(item.key) })
+                        AtChip(item.label, selected = isOn(item.key), onClick = { toggle(item.key) })
                     }
                 }
             }
@@ -146,7 +186,7 @@ fun MaintenanceItemPicker(
                 AtLabel("Seus itens")
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     mine.forEach { key ->
-                        AtChip(MaintenanceCatalog.label(key), selected = !otherMode && selectedKey == key, onClick = { pick(key) })
+                        AtChip(MaintenanceCatalog.label(key), selected = isOn(key), onClick = { toggle(key) })
                     }
                 }
             }
@@ -155,7 +195,10 @@ fun MaintenanceItemPicker(
                 selected = otherMode,
                 onClick = {
                     otherMode = true
-                    onSelect(MaintenanceCatalog.customKey(cat, customName, customKeys))
+                    val k = MaintenanceCatalog.customKey(cat, customName, customKeys)
+                    val base = selectedKeys.filter { it != customCurrent && it !in MaintenanceCatalog.REVIEW_KEYS }
+                    customCurrent = k
+                    onChange(if (k != null) base + k else base)
                 },
                 icon = Icons.Rounded.Add
             )
@@ -164,7 +207,10 @@ fun MaintenanceItemPicker(
                     customName,
                     { v ->
                         customName = v.take(40)
-                        onSelect(MaintenanceCatalog.customKey(cat, customName, customKeys))
+                        val k = MaintenanceCatalog.customKey(cat, customName, customKeys)
+                        val rest = selectedKeys.filter { it != customCurrent }
+                        onChange(if (k != null && k !in rest) rest + k else rest)
+                        customCurrent = k
                     },
                     "Qual foi o serviço?",
                     placeholder = "Ex.: selo do motor"

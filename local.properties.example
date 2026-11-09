@@ -18,3 +18,9 @@ EMAILJS_SERVICE_ID=
 EMAILJS_TEMPLATE_ID=
 EMAILJS_PUBLIC_KEY=
 EMAILJS_PRIVATE_KEY=
+
+# Carga de dados de teste (só no build de depuração): toque longo no logo da tela de login
+# cria esta conta e o histórico simulado do veículo. Deixe em branco para desativar.
+SEED_NAME=
+SEED_EMAIL=
+SEED_PASSWORD=
