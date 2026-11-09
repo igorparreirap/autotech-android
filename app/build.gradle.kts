@@ -41,6 +41,10 @@ android {
         listOf("EMAILJS_SERVICE_ID", "EMAILJS_TEMPLATE_ID", "EMAILJS_PUBLIC_KEY", "EMAILJS_PRIVATE_KEY").forEach { key ->
             buildConfigField("String", key, "\"${localProps.getProperty(key, "").trim()}\"")
         }
+        // Carga de dados de teste (util/DebugSeed): conta de teste no local.properties; vazio = desativada
+        listOf("SEED_NAME", "SEED_EMAIL", "SEED_PASSWORD").forEach { key ->
+            buildConfigField("String", key, "\"${localProps.getProperty(key, "").trim()}\"")
+        }
     }
 
     buildTypes {
