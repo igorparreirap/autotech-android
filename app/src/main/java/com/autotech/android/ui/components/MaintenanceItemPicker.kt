@@ -51,14 +51,25 @@ fun MaintenanceItemPicker(
     selectedKeys: List<String>,
     onChange: (List<String>) -> Unit,
     fuel: FuelType?,
-    customKeys: List<String>
+    customKeys: List<String>,
+    draftKey: String? = null,
+    onDraftChange: (String?) -> Unit = {}
 ) {
     var query by remember { mutableStateOf("") }
     var category by remember { mutableStateOf(selectedKeys.firstOrNull()?.let { MaintenanceCatalog.categoryOf(it) }) }
     var otherMode by remember { mutableStateOf(false) }
     var customName by remember { mutableStateOf("") }
-    // item próprio sendo digitado agora ("Outro"): troca de chave a cada letra
-    var customCurrent by remember { mutableStateOf<String?>(null) }
+    // item próprio sendo digitado agora ("Outro"): só entra na seleção quando o usuário toca em
+    // "Adicionar", para que cada letra digitada não vire um item separado
+    val customCurrent = draftKey
+
+    /** Confirma o item digitado: ele entra na seleção e o campo fica livre para outro. */
+    fun commitDraft(base: List<String> = selectedKeys): List<String> {
+        val d = draftKey
+        customName = ""
+        onDraftChange(null)
+        return if (d != null && d !in base) base.filter { it !in MaintenanceCatalog.REVIEW_KEYS } + d else base
+    }
 
     // item vindo de fora (ex.: completar uma manutenção marcada como "Já fiz")
     LaunchedEffect(selectedKeys.firstOrNull()) {
@@ -70,21 +81,22 @@ fun MaintenanceItemPicker(
 
     /** Marca ou desmarca; a revisão não se mistura com outros itens. */
     fun toggle(key: String) {
-        otherMode = false
         category = MaintenanceCatalog.categoryOf(key) ?: category
         val review = MaintenanceCatalog.REVIEW_KEYS
+        val current = selectedKeys
         onChange(
             when {
-                key in selectedKeys -> selectedKeys - key
+                key in current -> current - key
                 key in review -> listOf(key)
-                selectedKeys.any { it in review } -> listOf(key)
-                else -> selectedKeys + key
+                current.any { it in review } -> listOf(key)
+                else -> current + key
             }
         )
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (selectedKeys.isNotEmpty()) {
+        val shown = selectedKeys
+        if (shown.isNotEmpty()) {
             Column(
                 Modifier
                     .fillMaxWidth()
@@ -92,15 +104,15 @@ fun MaintenanceItemPicker(
                     .padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                if (selectedKeys.size > 1) {
-                    Text("${selectedKeys.size} itens selecionados", style = MaterialTheme.typography.labelMedium, color = AtColors.Primary)
+                if (shown.size > 1) {
+                    Text("${shown.size} itens selecionados", style = MaterialTheme.typography.labelMedium, color = AtColors.Primary)
                 }
-                selectedKeys.forEachIndexed { i, key ->
+                shown.forEachIndexed { i, key ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Rounded.CheckCircle, null, tint = AtColors.Primary, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            "${MaintenanceCatalog.categoryLabel(key)} › ${MaintenanceCatalog.label(key)}" + if (i == 0 && selectedKeys.size > 1) " (principal)" else "",
+                            "${MaintenanceCatalog.categoryLabel(key)} › ${MaintenanceCatalog.label(key)}" + if (i == 0 && shown.size > 1) " (principal)" else "",
                             style = MaterialTheme.typography.titleSmall,
                             color = AtColors.Primary,
                             modifier = Modifier.weight(1f)
@@ -110,11 +122,11 @@ fun MaintenanceItemPicker(
                             tint = AtColors.Primary,
                             modifier = Modifier
                                 .size(18.dp)
-                                .clickable { onChange(selectedKeys - key); if (key == customCurrent) { customCurrent = null; otherMode = false } }
+                                .clickable { onChange(selectedKeys - key) }
                         )
                     }
                 }
-                if (selectedKeys.none { it in MaintenanceCatalog.REVIEW_KEYS }) {
+                if (shown.none { it in MaintenanceCatalog.REVIEW_KEYS }) {
                     Text(
                         "Toque em outros itens para registrar tudo o que veio no mesmo comprovante.",
                         style = MaterialTheme.typography.bodySmall,
@@ -156,7 +168,8 @@ fun MaintenanceItemPicker(
                     onClick = {
                         if (category != c.key) {
                             category = c.key
-                            otherMode = false
+                            // o nome digitado continua no campo e passa a valer para a nova parte do carro
+                            if (otherMode) onDraftChange(MaintenanceCatalog.customKey(c.key, customName, customKeys))
                         }
                     },
                     icon = categoryIcon(c.key)
@@ -195,10 +208,8 @@ fun MaintenanceItemPicker(
                 selected = otherMode,
                 onClick = {
                     otherMode = true
-                    val k = MaintenanceCatalog.customKey(cat, customName, customKeys)
-                    val base = selectedKeys.filter { it != customCurrent && it !in MaintenanceCatalog.REVIEW_KEYS }
-                    customCurrent = k
-                    onChange(if (k != null) base + k else base)
+                    // "Outro" não se mistura com a revisão
+                    if (selectedKeys.any { it in MaintenanceCatalog.REVIEW_KEYS }) onChange(selectedKeys.filter { it !in MaintenanceCatalog.REVIEW_KEYS })
                 },
                 icon = Icons.Rounded.Add
             )
@@ -207,14 +218,26 @@ fun MaintenanceItemPicker(
                     customName,
                     { v ->
                         customName = v.take(40)
-                        val k = MaintenanceCatalog.customKey(cat, customName, customKeys)
-                        val rest = selectedKeys.filter { it != customCurrent }
-                        onChange(if (k != null && k !in rest) rest + k else rest)
-                        customCurrent = k
+                        onDraftChange(MaintenanceCatalog.customKey(cat, customName, customKeys))
                     },
                     "Qual foi o serviço?",
                     placeholder = "Ex.: selo do motor"
                 )
+                // vários itens fora da lista no mesmo atendimento: confirma o nome digitado e abre outro
+                if (customCurrent != null) {
+                    AtPillButton(
+                        "Adicionar \u201c${MaintenanceCatalog.label(customCurrent)}\u201d",
+                        { onChange(commitDraft()) },
+                        style = AtButtonStyle.Accent,
+                        compact = true,
+                        icon = Icons.Rounded.Add
+                    )
+                    Text(
+                        "Toque em Adicionar para incluir o item. Depois, se precisar, digite outro no mesmo campo.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AtColors.Muted
+                    )
+                }
             }
         }
     }
