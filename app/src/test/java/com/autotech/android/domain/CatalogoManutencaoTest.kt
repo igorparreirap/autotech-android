@@ -114,4 +114,12 @@ class CatalogoManutencaoTest {
         assertTrue(C.visibleItems("escapamento", FuelType.DIESEL).any { it.key == "dpf" })
         assertTrue(C.visibleItems("escapamento", FuelType.FLEX).none { it.key == "dpf" })
     }
+
+    @Test
+    fun `dois itens fora da lista na mesma parte sao itens diferentes`() {
+        val a = C.customKey("suspensao", "Bucha da bandeja")!!
+        val b = C.customKey("suspensao", "Pivo da bandeja", listOf(a))!!
+        assertTrue(a != b)
+        assertEquals("Pivo da bandeja", C.label(b))
+    }
 }

@@ -79,6 +79,10 @@ import com.autotech.android.ui.theme.AtColors
 import com.autotech.android.util.ReceiptFileStore
 import kotlinx.coroutines.launch
 import com.autotech.android.domain.MaintenanceCost
+import com.autotech.android.domain.MaintenanceSplit
+import com.autotech.android.domain.ItemEntry
+import com.autotech.android.domain.ItemRecord
+import androidx.compose.foundation.background
 import com.autotech.android.ui.components.MaintenanceItemPicker
 import com.autotech.android.ui.components.fuelType
 import com.autotech.android.data.mapper.toCycleInputs
@@ -241,7 +245,8 @@ fun MaintenanceListScreen(
                                     "\nPeças ${formatMoney(MaintenanceCost.parts(r.amount, l) ?: 0.0)} + mão de obra ${formatMoney(l)}"
                                 } ?: "") +
                                 (r.description?.let { "\n$it" } ?: ""),
-                            subtitleLines = 3,
+                            // data, peças e mão de obra, observação do item e descrição do atendimento
+                            subtitleLines = 5,
                             icon = maintenanceIcon(r.itemKey),
                             trailing = {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -275,7 +280,10 @@ fun AddMaintenanceScreen(
     val app = context.applicationContext as AutoTechApplication
     val scope = rememberCoroutineScope()
     // RF-04: itens marcados no seletor; o primeiro é o registro principal (valor e comprovante)
-    var selectedKeys by remember { mutableStateOf(listOf<String>()) }
+    var committedKeys by remember { mutableStateOf(listOf<String>()) }
+    // item fora da lista ainda sendo digitado ("Outro"): só vira item quando o usuário toca em "Adicionar"
+    var draftKey by remember { mutableStateOf<String?>(null) }
+    val selectedKeys = committedKeys
     val itemKey = selectedKeys.firstOrNull()
     // itens próprios já criados pelo usuário neste veículo (RF-04)
     val recordsFlow = remember(vehicleId) { app.graph.maintenanceRepository.observeRecords(vehicleId) }
@@ -291,6 +299,9 @@ fun AddMaintenanceScreen(
     var splitLabor by remember { mutableStateOf(false) }
     var partsValue by remember { mutableStateOf("") }
     var laborValue by remember { mutableStateOf("") }
+    // RF-04: com várias peças ou serviços, cada item tem o próprio valor e a própria observação
+    var itemValues by remember { mutableStateOf(mapOf<String, String>()) }
+    var itemNotes by remember { mutableStateOf(mapOf<String, String>()) }
     // comprovantes escolhidos (qualquer tipo de arquivo, vários), guardados de vez ao salvar
     var pending by remember { mutableStateOf<List<PendingReceipt>>(emptyList()) }
     // RF-04: só o KM do dia do serviço é obrigatório; marcado como KM atual, ele atualiza o odômetro
@@ -325,6 +336,8 @@ fun AddMaintenanceScreen(
     var ownInterval by remember { mutableStateOf(mapOf<String, Pair<String, String>>()) }
     LaunchedEffect(isReview) { reviewItems = emptyList() }
     val extraItems = if (isReview) reviewItems else selectedKeys.drop(1)
+    // vários itens marcados no seletor (fora da revisão): valores e observações por item
+    val perItem = !isReview && selectedKeys.size > 1
     var groupKm by remember { mutableStateOf("") }
     var groupMonths by remember { mutableStateOf("") }
     var addQuery by remember { mutableStateOf("") }
@@ -335,7 +348,7 @@ fun AddMaintenanceScreen(
     LaunchedEffect(pendingId) {
         if (pendingId <= 0) return@LaunchedEffect
         val p = app.graph.maintenanceRepository.getPending(pendingId) ?: return@LaunchedEffect
-        selectedKeys = listOf(p.itemKey)
+        committedKeys = listOf(p.itemKey)
         eventDate = p.doneDateMillis
         sameDay = false
         registeredDate = System.currentTimeMillis()
@@ -351,6 +364,10 @@ fun AddMaintenanceScreen(
     }
 
     fun save() {
+        draftKey?.let { d ->
+            error = "Toque em \u201cAdicionar\u201d para incluir \u201c${MaintenanceCatalog.label(d)}\u201d ou apague o nome digitado."
+            return
+        }
         val key = itemKey ?: run {
             error = "Escolha o item de manutenção (parte do carro e item)."
             return
@@ -366,8 +383,21 @@ fun AddMaintenanceScreen(
         // RN-02 / RN-05: o KM atual é opcional; sem ele, o odômetro do veículo não muda
         val typedCurrent: Long? = if (isCurrent) ek else vehicleKm.toLongOrNull()
         val vk = typedCurrent ?: maxOf(vehicle?.currentOdometerKm ?: ek, ek)
-        val am = if (splitLabor) MaintenanceCost.total(parseDecimal(partsValue), parseDecimal(laborValue)) else parseDecimal(amount)
-        val labor = if (splitLabor) parseDecimal(laborValue) else null
+        val day = SimpleDateFormat("dd/MM/yyyy", PT_BR).format(Date(eventDate))
+        val note = if (key in MaintenanceCatalog.REVIEW_KEYS)
+            "Feito na ${MaintenanceCatalog.label(key).lowercase(PT_BR)} de $day"
+        else
+            "Feito no mesmo atendimento de ${MaintenanceCatalog.label(key)} em $day"
+        // RF-04: um registro por item; a mão de obra e a descrição geral ficam no principal
+        val entries = if (perItem)
+            selectedKeys.map { ItemEntry(it, parseDecimal(itemValues[it].orEmpty()), itemNotes[it]) }
+        else
+            listOf(ItemEntry(key, if (splitLabor) parseDecimal(partsValue) else parseDecimal(amount), null))
+        val labor = if (perItem || splitLabor) parseDecimal(laborValue) else null
+        val recs = MaintenanceSplit.records(entries, labor, description, note)
+        val main = recs.first()
+        val extras = if (perItem) recs.drop(1)
+            else extraItems.filter { it != key }.map { ItemRecord(it, null, null, note) }
         scope.launch {
             saving = true
             error = null
@@ -380,9 +410,9 @@ fun AddMaintenanceScreen(
                 registeredAtMillis = registeredDate,
                 eventKm = ek,
                 vehicleKmAtRecord = vk,
-                amount = am,
-                laborAmount = labor,
-                description = description.ifBlank { null },
+                amount = main.amount,
+                laborAmount = main.labor,
+                description = main.description,
                 receiptPath = ReceiptPaths.join(saved.map { it.first })
             )
             app.graph.maintenanceRepository.addRecord(record, updateVehicleOdometerTo = typedCurrent)
@@ -399,15 +429,12 @@ fun AddMaintenanceScreen(
                         )
                     }
                     // itens feitos no mesmo atendimento (revisão ou comprovante com várias peças/serviços):
-                    // um registro por item, com o intervalo em comum ou o próprio; valor e comprovante ficam no principal
+                    // um registro por item, com o próprio valor e observação e o intervalo em comum ou o próprio;
+                    // mão de obra, descrição geral e comprovantes ficam no principal
                     run {
-                        val day = SimpleDateFormat("dd/MM/yyyy", PT_BR).format(Date(eventDate))
-                        val note = if (key in MaintenanceCatalog.REVIEW_KEYS)
-                            "Feito na ${MaintenanceCatalog.label(key).lowercase(PT_BR)} de $day"
-                        else
-                            "Feito no mesmo atendimento de ${MaintenanceCatalog.label(key)} em $day"
-                        for (item in extraItems.filter { it != key }) {
-                            val sub = record.copy(id = 0, itemKey = item, amount = null, laborAmount = null, description = note, receiptPath = null)
+                        for (extra in extras) {
+                            val item = extra.key
+                            val sub = record.copy(id = 0, itemKey = item, amount = extra.amount, laborAmount = null, description = extra.description, receiptPath = null)
                             app.graph.maintenanceRepository.addRecord(sub, updateVehicleOdometerTo = typedCurrent)
                                 .onSuccess { subId ->
                                     val own = ownInterval[item]
@@ -441,13 +468,15 @@ fun AddMaintenanceScreen(
                 AtCardTitle("Serviço", "Escolha a parte do carro e o item")
                 Spacer(Modifier.height(14.dp))
                 MaintenanceItemPicker(
-                    selectedKeys = selectedKeys,
+                    selectedKeys = committedKeys,
                     onChange = { keys ->
-                        selectedKeys = keys
-                        ownInterval = ownInterval.filterKeys { it in keys || it in reviewItems }
+                        committedKeys = keys
+                        ownInterval = ownInterval.filterKeys { it in keys || it in reviewItems || it == draftKey }
                     },
                     fuel = vehicle?.fuelType,
-                    customKeys = customKeys
+                    customKeys = customKeys,
+                    draftKey = draftKey,
+                    onDraftChange = { draftKey = it }
                 )
             }
         }
@@ -569,6 +598,49 @@ fun AddMaintenanceScreen(
                 AtCardTitle("Detalhes")
                 Spacer(Modifier.height(14.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (perItem) {
+                        Text(
+                            "Informe o valor de cada peça ou serviço e, se quiser, uma observação, como a marca ou a loja. A mão de obra e a descrição geral valem para o atendimento inteiro.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = AtColors.Muted
+                        )
+                        selectedKeys.forEach { k ->
+                            Column(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(AtColors.Card)
+                                    .padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(MaintenanceCatalog.label(k), style = MaterialTheme.typography.titleSmall)
+                                AtField(
+                                    itemValues[k].orEmpty(), { itemValues = itemValues + (k to it) }, "Valor",
+                                    placeholder = "0,00",
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                                )
+                                AtField(
+                                    itemNotes[k].orEmpty(), { itemNotes = itemNotes + (k to it) }, "Observação do item (opcional)",
+                                    placeholder = "Ex.: marca, loja onde comprou",
+                                    singleLine = false
+                                )
+                            }
+                        }
+                        AtField(
+                            laborValue, { laborValue = it }, "Mão de obra (opcional)",
+                            placeholder = "0,00",
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                        )
+                        Text(
+                            "Total: " + formatMoney(
+                                MaintenanceSplit.total(
+                                    selectedKeys.map { ItemEntry(it, parseDecimal(itemValues[it].orEmpty()), null) },
+                                    parseDecimal(laborValue)
+                                ) ?: 0.0
+                            ),
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                    } else {
                     AtCheckRow("Especificar mão de obra", splitLabor) { on ->
                         splitLabor = on
                         if (on && partsValue.isBlank()) partsValue = amount
@@ -607,7 +679,8 @@ fun AddMaintenanceScreen(
                             color = AtColors.Muted
                         )
                     }
-                    AtField(description, { description = it }, "Descrição", singleLine = false)
+                    }
+                    AtField(description, { description = it }, if (perItem) "Descrição do atendimento (opcional)" else "Descrição", singleLine = false)
                     ReceiptAttachments(
                         pending = pending,
                         onChange = { pending = it },

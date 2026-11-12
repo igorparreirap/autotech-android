@@ -122,4 +122,51 @@ class PainelFinanceiroTest {
     fun `sem mao de obra separada as pecas nao sao divididas`() {
         assertNull(MaintenanceCost.parts(470.0, null))
     }
+
+    // RF-04: manutenção com várias peças, cada uma com o próprio valor e observação
+    private val pecas = listOf(
+        ItemEntry("custom:suspensao:Bucha da bandeja", 80.0, "Marca Nakata"),
+        ItemEntry("custom:suspensao:Pivo da bandeja", 120.0, "Comprado na Auto Pecas Centro"),
+        ItemEntry("shock_front", 450.0, null))
+
+    @Test
+    fun `cada peca guarda o proprio valor e a mao de obra fica no principal`() {
+        val r = MaintenanceSplit.records(pecas, 150.0, "Barulho na frente resolvido", "Feito no mesmo atendimento")
+        assertEquals(3, r.size)
+        assertEquals(230.0, r[0].amount!!, 0.001)
+        assertEquals(150.0, r[0].labor!!, 0.001)
+        assertEquals(120.0, r[1].amount!!, 0.001)
+        assertNull(r[1].labor)
+        assertEquals(450.0, r[2].amount!!, 0.001)
+    }
+
+    @Test
+    fun `soma dos registros e igual ao total pago`() {
+        val r = MaintenanceSplit.records(pecas, 150.0, null, null)
+        assertEquals(800.0, r.sumOf { it.amount ?: 0.0 }, 0.001)
+        assertEquals(800.0, MaintenanceSplit.total(pecas, 150.0)!!, 0.001)
+    }
+
+    @Test
+    fun `observacao do item e descricao geral ficam em linhas separadas`() {
+        val r = MaintenanceSplit.records(pecas, null, "Barulho na frente resolvido", "Feito no mesmo atendimento")
+        assertEquals("Marca Nakata\nBarulho na frente resolvido", r[0].description)
+        assertEquals("Comprado na Auto Pecas Centro\nFeito no mesmo atendimento", r[1].description)
+        assertEquals("Feito no mesmo atendimento", r[2].description)
+    }
+
+    @Test
+    fun `item sem valor nem mao de obra fica sem valor`() {
+        val r = MaintenanceSplit.records(listOf(ItemEntry("oil", null, null), ItemEntry("oil_filter", null, "  ")), null, "  ", null)
+        assertNull(r[0].amount)
+        assertNull(r[0].description)
+        assertNull(r[1].description)
+        assertNull(MaintenanceSplit.total(listOf(ItemEntry("oil", null, null)), null))
+    }
+
+    @Test
+    fun `item repetido entra uma vez so`() {
+        val r = MaintenanceSplit.records(listOf(ItemEntry("oil", 50.0, null), ItemEntry("oil", 50.0, null)), null, null, null)
+        assertEquals(1, r.size)
+    }
 }
