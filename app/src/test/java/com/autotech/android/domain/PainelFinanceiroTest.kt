@@ -169,4 +169,19 @@ class PainelFinanceiroTest {
         val r = MaintenanceSplit.records(listOf(ItemEntry("oil", 50.0, null), ItemEntry("oil", 50.0, null)), null, null, null)
         assertEquals(1, r.size)
     }
+
+    @Test
+    fun `revisao guarda o proprio valor e o de cada item trocado`() {
+        val itens = listOf(
+            ItemEntry("review", 450.0, null),
+            ItemEntry("oil", 220.0, "Oleo 5W30 sintetico"),
+            ItemEntry("air_filter", 60.0, null),
+            ItemEntry("brake_fluid", null, "So verificado"))
+        val r = MaintenanceSplit.records(itens, 315.0, "Revisao dos 40 mil km", "Feito na revisao periodica")
+        assertEquals(765.0, r[0].amount!!, 0.001)
+        assertEquals(220.0, r[1].amount!!, 0.001)
+        assertNull(r[3].amount)
+        assertEquals("So verificado\nFeito na revisao periodica", r[3].description)
+        assertEquals(1045.0, r.sumOf { it.amount ?: 0.0 }, 0.001)
+    }
 }

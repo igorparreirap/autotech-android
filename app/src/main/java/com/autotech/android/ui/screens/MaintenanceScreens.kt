@@ -336,8 +336,10 @@ fun AddMaintenanceScreen(
     var ownInterval by remember { mutableStateOf(mapOf<String, Pair<String, String>>()) }
     LaunchedEffect(isReview) { reviewItems = emptyList() }
     val extraItems = if (isReview) reviewItems else selectedKeys.drop(1)
-    // vários itens marcados no seletor (fora da revisão): valores e observações por item
-    val perItem = !isReview && selectedKeys.size > 1
+    // vários itens no mesmo atendimento: valores e observações por item. Na revisão, os itens
+    // verificados vêm depois da própria revisão; fora dela, os itens marcados no seletor.
+    val detailKeys = if (isReview) listOfNotNull(itemKey) + reviewItems else selectedKeys
+    val perItem = detailKeys.size > 1
     var groupKm by remember { mutableStateOf("") }
     var groupMonths by remember { mutableStateOf("") }
     var addQuery by remember { mutableStateOf("") }
@@ -390,7 +392,7 @@ fun AddMaintenanceScreen(
             "Feito no mesmo atendimento de ${MaintenanceCatalog.label(key)} em $day"
         // RF-04: um registro por item; a mão de obra e a descrição geral ficam no principal
         val entries = if (perItem)
-            selectedKeys.map { ItemEntry(it, parseDecimal(itemValues[it].orEmpty()), itemNotes[it]) }
+            detailKeys.map { ItemEntry(it, parseDecimal(itemValues[it].orEmpty()), itemNotes[it]) }
         else
             listOf(ItemEntry(key, if (splitLabor) parseDecimal(partsValue) else parseDecimal(amount), null))
         val labor = if (perItem || splitLabor) parseDecimal(laborValue) else null
@@ -600,11 +602,14 @@ fun AddMaintenanceScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (perItem) {
                         Text(
-                            "Informe o valor de cada peça ou serviço e, se quiser, uma observação, como a marca ou a loja. A mão de obra e a descrição geral valem para o atendimento inteiro.",
+                            if (isReview)
+                                "Informe o valor da revisão e o de cada item trocado e, se quiser, uma observação, como a marca ou a loja. Itens só verificados podem ficar sem valor. A mão de obra e a descrição geral valem para a revisão inteira."
+                            else
+                                "Informe o valor de cada peça ou serviço e, se quiser, uma observação, como a marca ou a loja. A mão de obra e a descrição geral valem para o atendimento inteiro.",
                             style = MaterialTheme.typography.bodySmall,
                             color = AtColors.Muted
                         )
-                        selectedKeys.forEach { k ->
+                        detailKeys.forEach { k ->
                             Column(
                                 Modifier
                                     .fillMaxWidth()
@@ -634,7 +639,7 @@ fun AddMaintenanceScreen(
                         Text(
                             "Total: " + formatMoney(
                                 MaintenanceSplit.total(
-                                    selectedKeys.map { ItemEntry(it, parseDecimal(itemValues[it].orEmpty()), null) },
+                                    detailKeys.map { ItemEntry(it, parseDecimal(itemValues[it].orEmpty()), null) },
                                     parseDecimal(laborValue)
                                 ) ?: 0.0
                             ),
