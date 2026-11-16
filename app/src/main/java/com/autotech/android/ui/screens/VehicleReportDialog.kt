@@ -58,14 +58,19 @@ fun VehicleReportDialog(
     var error by remember { mutableStateOf<String?>(null) }
     val current = remember(vehicle.id) { VehicleReportPdf.currentReport(context, vehicle.id) }
 
+    var receipts by remember { mutableStateOf(VehicleReportPdf.Receipts()) }
     LaunchedEffect(vehicle.id) {
         fuel = app.graph.fuelRepository.listForVehicle(vehicle.id)
+        receipts = VehicleReportPdf.Receipts(
+            app.graph.maintenanceRepository.listReceipts(vehicle.id),
+            app.graph.fuelRepository.listReceipts(vehicle.id)
+        )
         maintenance = app.graph.maintenanceRepository.listForPdf(vehicle.id)
     }
     LaunchedEffect(maintenance, includeFuel, includeReceipts) {
         val m = maintenance ?: return@LaunchedEffect
         upToDate = withContext(Dispatchers.IO) {
-            val sig = VehicleReportPdf.signature(context, vehicle, m, fuel, VehicleReportPdf.Options(includeFuel, includeReceipts))
+            val sig = VehicleReportPdf.signature(context, vehicle, m, fuel, VehicleReportPdf.Options(includeFuel, includeReceipts), receipts)
             VehicleReportPdf.isUpToDate(context, vehicle.id, sig)
         }
     }
@@ -75,7 +80,7 @@ fun VehicleReportDialog(
         scope.launch {
             working = true
             error = null
-            VehicleReportPdf.ensure(context, vehicle, m, if (includeFuel) fuel else emptyList(), VehicleReportPdf.Options(includeFuel, includeReceipts))
+            VehicleReportPdf.ensure(context, vehicle, m, if (includeFuel) fuel else emptyList(), VehicleReportPdf.Options(includeFuel, includeReceipts), receipts)
                 .onSuccess { onGenerated(it) }
                 .onFailure { error = it.message ?: "Falha ao gerar o PDF." }
             working = false
@@ -96,9 +101,9 @@ fun VehicleReportDialog(
                     style = MaterialTheme.typography.bodyMedium
                 )
                 AtCheckRow("Abastecimentos (${fuel.size})", includeFuel) { includeFuel = it }
-                val receipts = (m?.sumOf { com.autotech.android.domain.ReceiptPaths.count(it.receiptPath) } ?: 0) +
-                    if (includeFuel) fuel.sumOf { com.autotech.android.domain.ReceiptPaths.count(it.receiptPath) } else 0
-                AtCheckRow("Comprovantes anexados ($receipts)", includeReceipts) { includeReceipts = it }
+                val receiptCount = (m?.sumOf { receipts.maintenance[it.id]?.size ?: 0 } ?: 0) +
+                    if (includeFuel) fuel.sumOf { receipts.fuel[it.id]?.size ?: 0 } else 0
+                AtCheckRow("Comprovantes anexados ($receiptCount)", includeReceipts) { includeReceipts = it }
                 if (includeReceipts) {
                     Text(
                         "No final do relatório, as fotos entram reduzidas, quatro por linha, junto do registro a que pertencem. Comprovantes em PDF entram como páginas.",

@@ -166,8 +166,8 @@ fun HomeScreen(
     val monthKey = remember { SimpleDateFormat("yyyy-MM", PT_BR).format(Date()) }
     val monthName = remember { SimpleDateFormat("MMMM", PT_BR).format(Date()) }
     val keyFmt = remember { SimpleDateFormat("yyyy-MM", PT_BR) }
-    val monthMaintenance = records.filter { keyFmt.format(Date(it.eventDateMillis)) == monthKey }.sumOf { it.amount ?: 0.0 }
-    val monthFuel = fuels.filter { keyFmt.format(Date(it.dateMillis)) == monthKey }.sumOf { it.amount ?: 0.0 }
+    val monthMaintenance = records.filter { keyFmt.format(Date(it.eventDateMillis)) == monthKey }.sumOf { it.amountCents ?: 0L }
+    val monthFuel = fuels.filter { keyFmt.format(Date(it.dateMillis)) == monthKey }.sumOf { it.amountCents ?: 0L }
 
     val greeting = remember {
         when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
@@ -476,7 +476,7 @@ fun HomeScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(formatMoney(monthMaintenance), style = MaterialTheme.typography.labelSmall, color = AtColors.Muted)
                         AtWaveform(
-                            fraction = if (total > 0) (monthMaintenance / total).toFloat() else 0f,
+                            fraction = if (total > 0) monthMaintenance.toFloat() / total else 0f,
                             modifier = Modifier
                                 .weight(1f)
                                 .padding(horizontal = 8.dp)

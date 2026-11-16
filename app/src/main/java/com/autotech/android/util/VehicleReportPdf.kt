@@ -32,7 +32,6 @@ import com.autotech.android.domain.FuelConsumption
 import com.autotech.android.domain.FuelMix
 import com.autotech.android.domain.FuelType
 import com.autotech.android.domain.MaintenanceCatalog
-import com.autotech.android.domain.ReceiptPaths
 import com.autotech.android.domain.VehicleNaming
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -56,10 +55,13 @@ object VehicleReportPdf {
 
     data class Options(val includeFuel: Boolean, val includeReceipts: Boolean)
 
+    /** Comprovantes de cada registro (id -> caminhos), lidos da tabela receipts. */
+    data class Receipts(val maintenance: Map<Long, List<String>> = emptyMap(), val fuel: Map<Long, List<String>> = emptyMap())
+
     private const val PREFIX = "Relatorio_AutoTech_"
 
     /** Muda quando o desenho do PDF mudar, para que relatórios antigos sejam refeitos. */
-    private const val LAYOUT_VERSION = 2
+    private const val LAYOUT_VERSION = 3
 
     private fun prefs(context: Context) = context.getSharedPreferences("autotech_reports", Context.MODE_PRIVATE)
 
@@ -80,15 +82,16 @@ object VehicleReportPdf {
         vehicle: VehicleEntity,
         maintenance: List<MaintenanceRecordEntity>,
         fuel: List<FuelRecordEntity>,
-        options: Options
+        options: Options,
+        receipts: Receipts = Receipts()
     ): String {
         val sb = StringBuilder("v$LAYOUT_VERSION|$options|$vehicle|")
         maintenance.forEach { sb.append(it).append('|') }
         if (options.includeFuel) fuel.forEach { sb.append(it).append('|') }
         VehiclePhotoStore.file(context, vehicle.id).takeIf { it.exists() }?.let { sb.append("foto:${it.length()}:${it.lastModified()}|") }
         if (options.includeReceipts) {
-            val paths = maintenance.flatMap { ReceiptPaths.split(it.receiptPath) } +
-                if (options.includeFuel) fuel.flatMap { ReceiptPaths.split(it.receiptPath) } else emptyList()
+            val paths = maintenance.flatMap { receipts.maintenance[it.id].orEmpty() } +
+                if (options.includeFuel) fuel.flatMap { receipts.fuel[it.id].orEmpty() } else emptyList()
             paths.forEach { p -> val f = File(p); sb.append("r:$p:${f.length()}:${f.lastModified()}|") }
         }
         val digest = java.security.MessageDigest.getInstance("SHA-1").digest(sb.toString().toByteArray())
@@ -106,11 +109,12 @@ object VehicleReportPdf {
         vehicle: VehicleEntity,
         maintenance: List<MaintenanceRecordEntity>,
         fuel: List<FuelRecordEntity>,
-        options: Options
+        options: Options,
+        receipts: Receipts = Receipts()
     ): Result<File> {
-        val sig = signature(context, vehicle, maintenance, fuel, options)
+        val sig = signature(context, vehicle, maintenance, fuel, options, receipts)
         if (isUpToDate(context, vehicle.id, sig)) return Result.success(currentReport(context, vehicle.id)!!)
-        return export(context, vehicle, maintenance, fuel, options).onSuccess { file ->
+        return export(context, vehicle, maintenance, fuel, options, receipts).onSuccess { file ->
             withContext(Dispatchers.IO) {
                 listReports(context, vehicle.plate).filter { it != file }.forEach { it.delete() }
                 currentReport(context, vehicle.id)?.takeIf { it != file }?.delete()
@@ -146,13 +150,14 @@ object VehicleReportPdf {
         vehicle: VehicleEntity,
         maintenance: List<MaintenanceRecordEntity>,
         fuel: List<FuelRecordEntity>,
-        options: Options
+        options: Options,
+        receipts: Receipts = Receipts()
     ): Result<File> = withContext(Dispatchers.IO) {
         runCatching {
             val now = Date()
             val name = PREFIX + vehicle.plate + "_" + SimpleDateFormat("yyyy-MM-dd_HHmmss", Locale.ROOT).format(now) + ".pdf"
             val out = File(reportsDir(context), name)
-            val doc = ReportBuilder(context, vehicle, now, options).build(maintenance, if (options.includeFuel) fuel else emptyList())
+            val doc = ReportBuilder(context, vehicle, now, options, receipts).build(maintenance, if (options.includeFuel) fuel else emptyList())
             try {
                 FileOutputStream(out).use { doc.writeTo(it) }
             } finally {
@@ -194,7 +199,8 @@ private class ReportBuilder(
     private val context: Context,
     private val vehicle: VehicleEntity,
     private val generatedAt: Date,
-    private val options: VehicleReportPdf.Options
+    private val options: VehicleReportPdf.Options,
+    private val receipts: VehicleReportPdf.Receipts
 ) {
     // Mesmas cores do tema do aplicativo (AtColors)
     private val primary = 0xFF1569CC.toInt()
@@ -219,7 +225,12 @@ private class ReportBuilder(
     private val ptBr = Locale("pt", "BR")
     private val dateFmt = SimpleDateFormat("dd/MM/yyyy", ptBr)
     private val stampFmt = SimpleDateFormat("dd/MM/yyyy 'às' HH:mm", ptBr)
-    private val money = NumberFormat.getCurrencyInstance(ptBr)
+    private val moneyFmt = NumberFormat.getCurrencyInstance(ptBr)
+    /** valores em centavos (ver domain/Money) e preços derivados em reais */
+    private val money = object {
+        fun format(cents: Long): String = moneyFmt.format(com.autotech.android.domain.Money.toReais(cents))
+        fun format(reais: Double): String = moneyFmt.format(reais)
+    }
     private val number = NumberFormat.getIntegerInstance(ptBr)
     private val decimal = NumberFormat.getNumberInstance(ptBr).apply { minimumFractionDigits = 2; maximumFractionDigits = 2 }
 
@@ -252,14 +263,14 @@ private class ReportBuilder(
         val fuelAttach = mutableMapOf<Long, Int>()
         if (options.includeReceipts) {
             maintenance.forEach { r ->
-                val paths = ReceiptPaths.split(r.receiptPath)
+                val paths = receipts.maintenance[r.id].orEmpty()
                 if (paths.isEmpty()) return@forEach
                 val n = attachments.size + 1
                 maintenanceAttach[r.id] = n
                 attachments += Attachment(n, "Manutenção", MaintenanceCatalog.label(r.itemKey), r.eventDateMillis, r.eventKm, paths)
             }
             fuel.forEach { f ->
-                val paths = ReceiptPaths.split(f.receiptPath)
+                val paths = receipts.fuel[f.id].orEmpty()
                 if (paths.isEmpty()) return@forEach
                 val n = attachments.size + 1
                 fuelAttach[f.id] = n
@@ -431,9 +442,9 @@ private class ReportBuilder(
     }
 
     private fun summary(maintenance: List<MaintenanceRecordEntity>, fuel: List<FuelRecordEntity>) {
-        val maintTotal = maintenance.sumOf { it.amount ?: 0.0 }
+        val maintTotal = maintenance.sumOf { it.amountCents ?: 0L }
         val items = if (options.includeFuel) {
-            val fuelTotal = fuel.sumOf { it.amount ?: 0.0 }
+            val fuelTotal = fuel.sumOf { it.amountCents ?: 0L }
             listOf(
                 Triple("Gasto com manutenção", money.format(maintTotal), "${maintenance.size} serviços"),
                 Triple("Gasto com combustível", money.format(fuelTotal), "${decimal.format(fuel.sumOf { it.liters })} litros"),
@@ -485,8 +496,8 @@ private class ReportBuilder(
         val textW = right - pad - amountW - leftX
         val descPaint = text(9f, ink)
         // RF-04: quando a mão de obra foi separada, o PDF mostra peças + mão de obra antes da descrição
-        val laborLine = r.laborAmount?.let { l ->
-            "Peças ${money.format(com.autotech.android.domain.MaintenanceCost.parts(r.amount, l) ?: 0.0)} + mão de obra ${money.format(l)}"
+        val laborLine = r.laborCents?.let { l ->
+            "Peças ${money.format(com.autotech.android.domain.MaintenanceCost.parts(r.amountCents, l) ?: 0L)} + mão de obra ${money.format(l)}"
         }
         val desc = listOfNotNull(laborLine, r.description?.takeIf { it.isNotBlank() })
             .joinToString("\n")
@@ -506,8 +517,8 @@ private class ReportBuilder(
         desc.forEachIndexed { i, l -> c.drawText(l, leftX, y + pad + 41f + i * 12.5f, descPaint) }
 
         c.drawText(
-            r.amount?.let { money.format(it) } ?: "—",
-            right - pad, y + pad + 12f, text(11.5f, if (r.amount == null) muted else ink, bold = true, align = Paint.Align.RIGHT)
+            r.amountCents?.let { money.format(it) } ?: "—",
+            right - pad, y + pad + 12f, text(11.5f, if (r.amountCents == null) muted else ink, bold = true, align = Paint.Align.RIGHT)
         )
         attachment?.let { chip("Anexo $it", right - pad, y + pad + 20f) }
         y += h + 8f
@@ -543,8 +554,8 @@ private class ReportBuilder(
                 add(dateFmt.format(Date(f.dateMillis)))
                 add("${number.format(f.eventKm)} km")
                 add(decimal.format(f.liters))
-                add(f.amount?.takeIf { f.liters > 0 }?.let { money.format(it / f.liters) } ?: "—")
-                add(f.amount?.let { money.format(it) } ?: "—")
+                add(f.amountCents?.takeIf { f.liters > 0 }?.let { money.format(it / 100.0 / f.liters) } ?: "—")
+                add(f.amountCents?.let { money.format(it) } ?: "—")
                 add(periods[f.id]?.let { p ->
                     decimal.format(p.kmPerLiter) + when (p.burned) {
                         FuelMix.ETHANOL -> " (etanol)"
@@ -566,7 +577,7 @@ private class ReportBuilder(
         round(RectF(m, y + 2f, right, y + 26f), field, 10f)
         c.drawText("Total", xs[0] + 10f, y + 18f, text(9f, ink, bold = true))
         c.drawText(decimal.format(fuel.sumOf { it.liters }), xs[2] + 10f, y + 18f, text(9f, ink, bold = true))
-        c.drawText(money.format(fuel.sumOf { it.amount ?: 0.0 }), xs[4] + 10f, y + 18f, text(9f, ink, bold = true))
+        c.drawText(money.format(fuel.sumOf { it.amountCents ?: 0L }), xs[4] + 10f, y + 18f, text(9f, ink, bold = true))
         y += 34f
     }
 

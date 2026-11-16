@@ -24,7 +24,8 @@ class AppGraph(application: AutoTechApplication) {
     val vehicleRepository = VehicleRepository(
         vehicleDao = db.vehicleDao(),
         maintenanceDao = db.maintenanceDao(),
-        fuelDao = db.fuelDao()
+        fuelDao = db.fuelDao(),
+        receiptDao = db.receiptDao()
     )
 
     val authRepository = AuthRepository(db.userDao())
@@ -48,12 +49,14 @@ class AppGraph(application: AutoTechApplication) {
         vehicleDao = db.vehicleDao(),
         cycleDao = db.maintenanceCycleDao(),
         pendingDao = db.pendingMaintenanceDao(),
+        receiptDao = db.receiptDao(),
         vehicleRepository = vehicleRepository
     )
 
     val fuelRepository = FuelRepository(
         fuelDao = db.fuelDao(),
         vehicleDao = db.vehicleDao(),
+        receiptDao = db.receiptDao(),
         vehicleRepository = vehicleRepository
     )
 }

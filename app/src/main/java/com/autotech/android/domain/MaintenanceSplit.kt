@@ -1,10 +1,10 @@
 package com.autotech.android.domain
 
-/** RF-04: o que o usuário informou para um item de uma manutenção com várias peças ou serviços. */
-data class ItemEntry(val key: String, val value: Double?, val note: String?)
+/** RF-04: o que o usuário informou para um item de uma manutenção com várias peças ou serviços (valor em centavos). */
+data class ItemEntry(val key: String, val value: Long?, val note: String?)
 
 /** Registro que será gravado para um item: [amount] já inclui a mão de obra quando o item é o principal. */
-data class ItemRecord(val key: String, val amount: Double?, val labor: Double?, val description: String?)
+data class ItemRecord(val key: String, val amount: Long?, val labor: Long?, val description: String?)
 
 /**
  * RF-04: divide uma manutenção em um registro por item.
@@ -16,7 +16,7 @@ data class ItemRecord(val key: String, val amount: Double?, val labor: Double?, 
 object MaintenanceSplit {
 
     /** Registros na ordem dos itens; o primeiro é o principal. */
-    fun records(items: List<ItemEntry>, labor: Double?, general: String?, sameServiceNote: String?): List<ItemRecord> {
+    fun records(items: List<ItemEntry>, labor: Long?, general: String?, sameServiceNote: String?): List<ItemRecord> {
         val distinct = items.distinctBy { it.key }
         return distinct.mapIndexed { i, item ->
             if (i == 0) {
@@ -38,7 +38,7 @@ object MaintenanceSplit {
     }
 
     /** Total pago no atendimento: soma das peças e da mão de obra; null se nada foi informado. */
-    fun total(items: List<ItemEntry>, labor: Double?): Double? {
+    fun total(items: List<ItemEntry>, labor: Long?): Long? {
         val values = items.distinctBy { it.key }.mapNotNull { it.value }
         val parts = if (values.isEmpty()) null else values.sum()
         return MaintenanceCost.total(parts, labor)

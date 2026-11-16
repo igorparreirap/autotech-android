@@ -236,7 +236,7 @@ fun SearchScreen(
                             subtitle = "${names[r.vehicleId] ?: ""} · ${df.format(Date(r.eventDateMillis))} · ${formatKm(r.eventKm)} km",
                             icon = maintenanceIcon(r.itemKey),
                             onClick = { go(NavRoutes.maintenanceList(r.vehicleId)) },
-                            trailing = { Text(r.amount?.let { formatMoney(it) } ?: "—", style = MaterialTheme.typography.titleSmall) }
+                            trailing = { Text(r.amountCents?.let { formatMoney(it) } ?: "—", style = MaterialTheme.typography.titleSmall) }
                         )
                     }
                 }

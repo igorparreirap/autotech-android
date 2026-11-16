@@ -26,12 +26,12 @@ data class MaintenanceRecordEntity(
     val eventDateMillis: Long,
     val eventKm: Long,
     val vehicleKmAtRecord: Long,
-    val amount: Double?,
+    /** RF-04: valor total em centavos (ver domain/Money); null quando não foi informado. */
+    val amountCents: Long?,
     val description: String?,
-    /** RF-04: caminhos dos comprovantes, um por linha (ver ReceiptPaths); null quando não há anexo. */
-    val receiptPath: String?,
     /** RF-04: data em que o registro foi lançado no app. */
     @ColumnInfo(defaultValue = "0") val registeredAtMillis: Long = 0,
-    /** RF-04: parte do valor que foi mão de obra (só quando o usuário separa; [amount] continua sendo o total). */
-    val laborAmount: Double? = null
+    /** RF-04: parte do valor que foi mão de obra, em centavos (só quando o usuário separa; [amountCents] continua sendo o total). */
+    val laborCents: Long? = null
 )
+// Os comprovantes ficam na tabela receipts (ReceiptEntity), um registro por arquivo.

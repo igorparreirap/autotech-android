@@ -11,7 +11,6 @@ import com.autotech.android.ui.components.ReceiptOpenButton
 import com.autotech.android.ui.components.AtSegmented
 import com.autotech.android.domain.FuelChoice
 import com.autotech.android.domain.FuelEntry
-import com.autotech.android.domain.ReceiptPaths
 import com.autotech.android.util.PendingReceipt
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -63,6 +62,7 @@ import com.autotech.android.ui.components.Reveal
 import com.autotech.android.ui.components.formatKm
 import com.autotech.android.ui.components.formatMoney
 import com.autotech.android.ui.components.parseDecimal
+import com.autotech.android.ui.components.parseMoney
 import com.autotech.android.util.ReceiptFileStore
 import kotlinx.coroutines.launch
 import com.autotech.android.data.mapper.toFillUp
@@ -86,6 +86,8 @@ fun FuelListScreen(
     val app = context.applicationContext as AutoTechApplication
     val recordsFlow = remember(vehicleId) { app.graph.fuelRepository.observeRecords(vehicleId) }
     val vehicleFlow = remember(vehicleId) { app.graph.vehicleRepository.observeVehicle(vehicleId) }
+    val receiptsFlow = remember(vehicleId) { app.graph.fuelRepository.observeReceipts(vehicleId) }
+    val receipts by receiptsFlow.collectAsState(initial = emptyMap())
     val records by recordsFlow.collectAsState(initial = emptyList())
     val vehicle by vehicleFlow.collectAsState(initial = null)
     val df = remember { SimpleDateFormat("dd/MM/yyyy", PT_BR) }
@@ -100,7 +102,7 @@ fun FuelListScreen(
         }
 
         Reveal(0) {
-            val total = records.sumOf { it.amount ?: 0.0 }
+            val total = records.sumOf { it.amountCents ?: 0L }
             val liters = records.sumOf { it.liters }
             DarkSummaryCard(
                 label = "Gasto com combustível",
@@ -149,8 +151,8 @@ fun FuelListScreen(
                             icon = Icons.Rounded.LocalGasStation,
                             trailing = {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    ReceiptOpenButton(r.receiptPath)
-                                    Text(r.amount?.let { formatMoney(it) } ?: "—", style = MaterialTheme.typography.titleSmall)
+                                    ReceiptOpenButton(receipts[r.id].orEmpty())
+                                    Text(r.amountCents?.let { formatMoney(it) } ?: "—", style = MaterialTheme.typography.titleSmall)
                                 }
                             }
                         )
@@ -232,7 +234,7 @@ fun AddFuelScreen(
                 error = it.message
                 return
             }
-        val am = parseDecimal(amount)
+        val am = parseMoney(amount)
         scope.launch {
             saving = true
             error = null
@@ -245,13 +247,12 @@ fun AddFuelScreen(
                 eventKm = ek,
                 vehicleKm = vk,
                 liters = lit.total,
-                amount = am,
-                receiptPath = ReceiptPaths.join(saved.map { it.first }),
+                amountCents = am,
                 ethanolLiters = lit.ethanol,
                 gasolineLiters = lit.gasoline,
                 computeConsumption = compute
             )
-            app.graph.fuelRepository.addRecord(record, updateVehicleOdometerTo = typedCurrent)
+            app.graph.fuelRepository.addRecord(record, updateVehicleOdometerTo = typedCurrent, receipts = saved.map { it.first })
                 .onSuccess { onDone() }
                 .onFailure {
                     ReceiptFileStore.revertAll(saved)

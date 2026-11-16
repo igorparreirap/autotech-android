@@ -26,10 +26,10 @@ fun toCycleInputs(cycles: List<MaintenanceCycleEntity>, records: List<Maintenanc
 }
 
 fun MaintenanceRecordEntity.toExpense(): Expense =
-    Expense(vehicleId, eventDateMillis, eventKm, amount ?: 0.0, MaintenanceCatalog.categoryLabel(itemKey), false, 0.0, itemKey)
+    Expense(vehicleId, eventDateMillis, eventKm, amountCents ?: 0L, MaintenanceCatalog.categoryLabel(itemKey), false, 0.0, itemKey)
 
 fun FuelRecordEntity.toExpense(): Expense =
-    Expense(vehicleId, dateMillis, eventKm, amount ?: 0.0, "Combustível", true, liters, null)
+    Expense(vehicleId, dateMillis, eventKm, amountCents ?: 0L, "Combustível", true, liters, null)
 
 /** RF-05: abastecimento visto pelo cálculo de consumo (domain/FuelConsumption). */
 fun FuelRecordEntity.toFillUp(): com.autotech.android.domain.FillUp =

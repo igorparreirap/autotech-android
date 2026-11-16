@@ -116,11 +116,12 @@ private enum class Grouping(val label: String, val kind: SpendGrouping) {
 }
 
 /** Barra do gráfico: valores do domínio + rótulos para a tela. */
-private data class Bucket(val label: String, val fullLabel: String, val maintenance: Double, val fuel: Double) {
-    val total get() = maintenance + fuel
+/** Barra do gráfico; valores em centavos (ver domain/Money). */
+private data class Bucket(val label: String, val fullLabel: String, val maintenance: Long, val fuel: Long) {
+    val total: Long get() = maintenance + fuel
 }
 
-private data class Slice(val label: String, val value: Double, val color: Color)
+private data class Slice(val label: String, val value: Long, val color: Color)
 
 private val SLICE_COLORS = listOf(
     Color(0xFF1569CC), Color(0xFF0E2A57), Color(0xFF74B8F0),
@@ -281,15 +282,15 @@ fun DashboardScreen(
 
                 // ── Indicadores (cartões do topo) ────────────────────────────
                 Reveal(1) {
-                    val total = filtered.sumOf { it.amount }
-                    val maint = filtered.filter { !it.isFuel }.sumOf { it.amount }
-                    val fuel = filtered.filter { it.isFuel }.sumOf { it.amount }
-                    val pTotal = previous.sumOf { it.amount }
-                    val pMaint = previous.filter { !it.isFuel }.sumOf { it.amount }
-                    val pFuel = previous.filter { it.isFuel }.sumOf { it.amount }
+                    val total = filtered.sumOf { it.amountCents }
+                    val maint = filtered.filter { !it.isFuel }.sumOf { it.amountCents }
+                    val fuel = filtered.filter { it.isFuel }.sumOf { it.amountCents }
+                    val pTotal = previous.sumOf { it.amountCents }
+                    val pMaint = previous.filter { !it.isFuel }.sumOf { it.amountCents }
+                    val pFuel = previous.filter { it.isFuel }.sumOf { it.amountCents }
                     val km = SpendingAnalytics.kmDriven(filtered)
                     val literPrice = SpendingAnalytics.averageLiterPrice(filtered)
-                    val paidFills = filtered.count { it.isFuel && it.amount > 0 && it.liters > 0 }
+                    val paidFills = filtered.count { it.isFuel && it.amountCents > 0 && it.liters > 0 }
 
                     Row(
                         Modifier.horizontalScroll(rememberScrollState()),
@@ -338,7 +339,7 @@ fun DashboardScreen(
                         }
                         Spacer(Modifier.height(14.dp))
 
-                        if (buckets.isEmpty() || buckets.all { it.total == 0.0 }) {
+                        if (buckets.isEmpty() || buckets.all { it.total == 0L }) {
                             Text(
                                 "Nenhum gasto neste período.",
                                 style = MaterialTheme.typography.bodyMedium,
@@ -374,7 +375,7 @@ fun DashboardScreen(
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(formatMoney(sel.total), style = MaterialTheme.typography.titleLarge)
                                             if (prevB != null && prevB.total > 0) {
-                                                val d = (sel.total - prevB.total) / prevB.total * 100
+                                                val d = (sel.total - prevB.total).toDouble() / prevB.total * 100
                                                 Spacer(Modifier.width(8.dp))
                                                 Text(
                                                     pctText(d),
@@ -446,7 +447,7 @@ fun DashboardScreen(
                                         overflow = TextOverflow.Ellipsis
                                     )
                                     Text(
-                                        String.format(PT_BR, "%.0f%%", s.value / sum * 100),
+                                        String.format(PT_BR, "%.0f%%", s.value.toDouble() / sum * 100),
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = AtColors.Muted,
                                         modifier = Modifier.width(52.dp),
@@ -476,7 +477,7 @@ fun DashboardScreen(
                         StatRow("Abastecimentos", "${fills.size}")
                         StatRow("Litros abastecidos", String.format(PT_BR, "%.1f L", fills.sumOf { it.liters }))
                         StatRow("Manutenções", "${maints.size}")
-                        StatRow("Gasto médio por manutenção", if (maints.isNotEmpty()) formatMoney(maints.sumOf { it.amount } / maints.size) else "—")
+                        StatRow("Gasto médio por manutenção", if (maints.isNotEmpty()) formatMoney(maints.sumOf { it.amountCents } / maints.size) else "—")
                         StatRow("Km rodados no período", if (km > 0) "${formatKm(km)} km" else "—")
                         StatRow("Último lançamento", filtered.maxOfOrNull { it.date }?.let { dfl.format(Date(it)) } ?: "—")
                     }
@@ -499,7 +500,7 @@ fun DashboardScreen(
                                     title = if (e.isFuel) e.category else com.autotech.android.domain.MaintenanceCatalog.label(e.itemKey ?: "other"),
                                     subtitle = "${names[e.vehicleId] ?: ""} · ${dfl.format(Date(e.date))} · ${formatKm(e.km)} km",
                                     icon = if (e.isFuel) Icons.Rounded.LocalGasStation else maintenanceIcon(e.itemKey ?: "other"),
-                                    trailing = { Text(formatMoney(e.amount), style = MaterialTheme.typography.titleSmall) }
+                                    trailing = { Text(formatMoney(e.amountCents), style = MaterialTheme.typography.titleSmall) }
                                 )
                             }
                         }
@@ -581,7 +582,8 @@ private val CHART_H = 170.dp
 
 @Composable
 private fun BarChart(buckets: List<Bucket>, selected: Int, onSelect: (Int) -> Unit) {
-    val top = niceCeil(buckets.maxOf { it.total })
+    // escala em reais; as barras vêm em centavos
+    val top = niceCeil(buckets.maxOf { it.total } / 100.0)
     val scroll = rememberScrollState()
     LaunchedEffect(buckets.size) { scroll.animateScrollTo(scroll.maxValue) }
     Row(Modifier.fillMaxWidth()) {
@@ -619,7 +621,7 @@ private fun BarChart(buckets: List<Bucket>, selected: Int, onSelect: (Int) -> Un
                 buckets.forEachIndexed { i, b ->
                     val isSel = i == selected
                     val h by animateDpAsState(
-                        CHART_H * (b.total / top).toFloat().coerceIn(0f, 1f),
+                        CHART_H * (b.total / 100.0 / top).toFloat().coerceIn(0f, 1f),
                         tween(700, easing = FastOutSlowInEasing),
                         label = "bar"
                     )
