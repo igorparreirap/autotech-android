@@ -159,15 +159,15 @@ class ConsumoCombustivelTest {
     }
 
     @Test
-    fun `formato antigo dos comprovantes e separado na mesma ordem para a migracao`() {
+    fun `caminhos dos comprovantes sao separados na mesma ordem na migracao do banco`() {
         val raw = ReceiptPaths.join(listOf("/a/bomba.jpg", "/a/painel.jpg", "/a/nota.pdf"))
         assertEquals(listOf("/a/bomba.jpg", "/a/painel.jpg", "/a/nota.pdf"), ReceiptPaths.split(raw))
         assertEquals(3, ReceiptPaths.count(raw))
     }
 
     @Test
-    fun `registro antigo com um so comprovante continua valido`() {
-        assertEquals(listOf("/a/antigo.jpg"), ReceiptPaths.split("/a/antigo.jpg"))
+    fun `caminho com um so comprovante e lido sem separador`() {
+        assertEquals(listOf("/a/foto.jpg"), ReceiptPaths.split("/a/foto.jpg"))
     }
 
     @Test
