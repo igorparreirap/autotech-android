@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -61,6 +63,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -283,11 +286,14 @@ fun HomeScreen(
             val main = HomeHighlights.review(statuses)
             // ── Odômetro + Próxima revisão ──────────────────────────────────
             Reveal(4) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Com fonte ou tela ampliadas, os dois cartões ficam um embaixo do outro e crescem
+                // junto com o texto, para que nenhum valor seja cortado (RNF-04).
+                val fontScale = LocalDensity.current.fontScale
+                val stacked = fontScale > 1.15f
+                val cardHeight = (214f * fontScale.coerceAtLeast(1f)).dp
+                val odometerCard: @Composable (Modifier) -> Unit = { cardModifier ->
                     AtCard(
-                        Modifier
-                            .weight(1f)
-                            .height(214.dp),
+                        cardModifier.height(cardHeight),
                         onClick = { onOpenVehicle(vehicle.id) }
                     ) {
                         Column(Modifier.fillMaxSize()) {
@@ -301,7 +307,7 @@ fun HomeScreen(
                                     maxLines = 1
                                 )
                                 Spacer(Modifier.width(4.dp))
-                                Text("km", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(bottom = 4.dp))
+                                Text("km", style = MaterialTheme.typography.bodyMedium, maxLines = 1, softWrap = false, modifier = Modifier.padding(bottom = 4.dp))
                                 Spacer(Modifier.weight(1f))
                                 Icon(Icons.Rounded.Speed, null, Modifier.size(26.dp))
                             }
@@ -332,11 +338,11 @@ fun HomeScreen(
                             }
                         }
                     }
+                }
 
+                val reviewCard: @Composable (Modifier) -> Unit = { cardModifier ->
                     AtCard(
-                        Modifier
-                            .weight(1f)
-                            .height(214.dp),
+                        cardModifier.height(cardHeight),
                         onClick = { onMaintenance(vehicle.id) }
                     ) {
                         Column(Modifier.fillMaxSize()) {
@@ -351,7 +357,10 @@ fun HomeScreen(
                                 fraction = remaining ?: 0f,
                                 centerText = remaining?.let { "${(it * 100).toInt()}%" } ?: "—",
                                 progressColor = if (main?.overdue == true) AtColors.Danger else AtColors.Primary,
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier
+                                    .align(Alignment.CenterHorizontally)
+                                    .widthIn(max = 170.dp)
+                                    .fillMaxWidth()
                             )
                             Spacer(Modifier.weight(1f))
                             Row(
@@ -383,6 +392,18 @@ fun HomeScreen(
                                 )
                             }
                         }
+                    }
+                }
+
+                if (stacked) {
+                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        odometerCard(Modifier.fillMaxWidth())
+                        reviewCard(Modifier.fillMaxWidth())
+                    }
+                } else {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        odometerCard(Modifier.weight(1f))
+                        reviewCard(Modifier.weight(1f))
                     }
                 }
             }
@@ -424,31 +445,46 @@ fun HomeScreen(
             Reveal(8) {
                 val total = monthMaintenance + monthFuel
                 AtCard(Modifier.fillMaxWidth(), onClick = onDashboard) {
-                    Box(
+                    // Coluna em vez de posições fixas: com fonte ampliada, o título, as etiquetas e o
+                    // total se acomodam sem sobreposição (RNF-04).
+                    Column(
                         Modifier
                             .fillMaxWidth()
-                            .height(150.dp)
+                            .heightIn(min = 150.dp)
                             .clip(RoundedCornerShape(18.dp))
                             .background(Brush.linearGradient(listOf(AtColors.Primary, AtColors.Deep)))
                             .padding(16.dp)
                     ) {
-                        Text(
-                            "GASTOS\n${monthName.uppercase(PT_BR)}",
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black, lineHeight = 22.sp),
-                            color = Color.White,
-                            modifier = Modifier.align(Alignment.TopStart)
-                        )
-                        Text(
-                            "// ${vehicle.plate}\n// manutenção\n// combustível",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White,
-                            textAlign = TextAlign.End,
-                            modifier = Modifier.align(Alignment.TopEnd)
-                        )
+                        val bannerTitle: @Composable (Modifier) -> Unit = { m ->
+                            Text(
+                                "GASTOS\n${monthName.uppercase(PT_BR)}",
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black, lineHeight = 22.sp),
+                                color = Color.White,
+                                modifier = m
+                            )
+                        }
+                        val bannerTags: @Composable (TextAlign) -> Unit = { align ->
+                            Text(
+                                "// ${vehicle.plate}\n// manutenção\n// combustível",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White,
+                                textAlign = align
+                            )
+                        }
+                        if (LocalDensity.current.fontScale > 1.15f) {
+                            bannerTitle(Modifier)
+                            Spacer(Modifier.height(6.dp))
+                            bannerTags(TextAlign.Start)
+                        } else {
+                            Row(Modifier.fillMaxWidth()) {
+                                bannerTitle(Modifier.weight(1f).padding(end = 8.dp))
+                                bannerTags(TextAlign.End)
+                            }
+                        }
+                        Spacer(Modifier.height(18.dp))
                         AnimatedContent(
                             targetState = total,
                             transitionSpec = { fadeIn() togetherWith fadeOut() },
-                            modifier = Modifier.align(Alignment.BottomStart),
                             label = "total"
                         ) { t ->
                             Text(
@@ -474,19 +510,20 @@ fun HomeScreen(
                     )
                     Spacer(Modifier.height(12.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(formatMoney(monthMaintenance), style = MaterialTheme.typography.labelSmall, color = AtColors.Muted)
+                        Column {
+                            Text(formatMoney(monthMaintenance), style = MaterialTheme.typography.labelSmall, color = AtColors.Muted, maxLines = 1)
+                            Text("Manutenção", style = MaterialTheme.typography.labelSmall, color = AtColors.Muted, maxLines = 1)
+                        }
                         AtWaveform(
                             fraction = if (total > 0) monthMaintenance.toFloat() / total else 0f,
                             modifier = Modifier
                                 .weight(1f)
                                 .padding(horizontal = 8.dp)
                         )
-                        Text(formatMoney(monthFuel), style = MaterialTheme.typography.labelSmall, color = AtColors.Muted)
-                    }
-                    Row {
-                        Text("Manutenção", style = MaterialTheme.typography.labelSmall, color = AtColors.Muted)
-                        Spacer(Modifier.weight(1f))
-                        Text("Combustível", style = MaterialTheme.typography.labelSmall, color = AtColors.Muted)
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(formatMoney(monthFuel), style = MaterialTheme.typography.labelSmall, color = AtColors.Muted, maxLines = 1)
+                            Text("Combustível", style = MaterialTheme.typography.labelSmall, color = AtColors.Muted, maxLines = 1)
+                        }
                     }
                 }
             }
