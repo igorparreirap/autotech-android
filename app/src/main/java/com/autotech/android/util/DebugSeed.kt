@@ -1,5 +1,6 @@
 package com.autotech.android.util
 
+import com.autotech.android.domain.Money
 import com.autotech.android.AutoTechApplication
 import com.autotech.android.BuildConfig
 import com.autotech.android.data.local.entity.FuelRecordEntity
@@ -98,7 +99,7 @@ object DebugSeed {
                 g.fuelRepository.addRecord(
                     FuelRecordEntity(
                         vehicleId = vid, dateMillis = t, eventKm = km, vehicleKm = km,
-                        liters = round2(liters), amount = round2(liters * price), receiptPath = null, registeredAtMillis = t,
+                        liters = round2(liters), amountCents = Money.fromReais(round2(liters) * price), registeredAtMillis = t,
                         ethanolLiters = if (ethanol) round2(liters) else null,
                         gasolineLiters = if (ethanol) null else round2(liters),
                         computeConsumption = !f
@@ -120,14 +121,15 @@ object DebugSeed {
             events += Ev(t, km) { _ ->
                 val rec = MaintenanceRecordEntity(
                     vehicleId = vid, itemKey = key, eventDateMillis = t, eventKm = km, vehicleKmAtRecord = km,
-                    amount = amount, description = desc, receiptPath = null, registeredAtMillis = t, laborAmount = labor
+                    amountCents = amount?.let { Money.fromReais(it) }, description = desc, registeredAtMillis = t,
+                    laborCents = labor?.let { Money.fromReais(it) }
                 )
                 val id = g.maintenanceRepository.addRecord(rec, updateVehicleOdometerTo = km).getOrThrow()
                 if (intervalKm != null || months != null) g.maintenanceRepository.addCustomCycle(vid, id, key, intervalKm, months)
                 val note = if (key == "review") "Feito na revisão periódica" else "Feito no mesmo atendimento"
                 for (s in subs) {
                     val sid = g.maintenanceRepository.addRecord(
-                        rec.copy(id = 0, itemKey = s.key, amount = null, laborAmount = null, description = note), updateVehicleOdometerTo = km
+                        rec.copy(id = 0, itemKey = s.key, amountCents = null, laborCents = null, description = note), updateVehicleOdometerTo = km
                     ).getOrThrow()
                     if (s.km != null || s.months != null) g.maintenanceRepository.addCustomCycle(vid, sid, s.key, s.km, s.months)
                 }

@@ -39,8 +39,9 @@ object FuelEntry {
 }
 
 /**
- * RF-04 / RF-05: um registro pode ter vários comprovantes (fotos da bomba, do painel, nota fiscal...).
- * Os caminhos ficam juntos no mesmo campo, um por linha; registros antigos, com um só caminho, continuam válidos.
+ * Formato antigo dos comprovantes (banco até a versão 9): os caminhos ficavam juntos num só campo,
+ * um por linha. Desde a versão 10 cada arquivo é uma linha da tabela receipts; este objeto só é usado
+ * pela migração 9 -> 10, para separar os caminhos já gravados.
  */
 object ReceiptPaths {
 

@@ -37,7 +37,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.autotech.android.domain.ReceiptPaths
 import com.autotech.android.ui.theme.AtColors
 import com.autotech.android.util.PendingReceipt
 import com.autotech.android.util.ReceiptFileStore
@@ -137,8 +136,7 @@ fun ReceiptAttachments(
  * mostra a lista para o usuário escolher qual abrir.
  */
 @Composable
-fun ReceiptOpenButton(raw: String?) {
-    val paths = ReceiptPaths.split(raw)
+fun ReceiptOpenButton(paths: List<String>) {
     if (paths.isEmpty()) return
     val context = LocalContext.current
     var open by remember { mutableStateOf(false) }

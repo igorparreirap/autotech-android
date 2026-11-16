@@ -120,6 +120,12 @@ fun formatKm(km: Long): String = NumberFormat.getIntegerInstance(PT_BR).format(k
 
 fun formatMoney(value: Double): String = NumberFormat.getCurrencyInstance(PT_BR).format(value)
 
+/** Valor guardado em centavos (ver domain/Money), formatado sem passar por Double. */
+fun formatMoney(cents: Long): String = NumberFormat.getCurrencyInstance(PT_BR).format(com.autotech.android.domain.Money.toReais(cents))
+
+/** Valor digitado pelo usuário em centavos ("1.275,90", "289,9"...). */
+fun parseMoney(raw: String): Long? = com.autotech.android.domain.Money.parseCents(raw)
+
 /** Aceita "12,50" e "12.50". */
 fun parseDecimal(raw: String): Double? = raw.trim().replace(',', '.').toDoubleOrNull()
 

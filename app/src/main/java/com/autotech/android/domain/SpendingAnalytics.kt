@@ -8,7 +8,8 @@ data class Expense(
     /** data do serviço ou do abastecimento (nunca a data do registro) */
     val date: Long,
     val km: Long,
-    val amount: Double,
+    /** valor em centavos (ver [Money]) */
+    val amountCents: Long,
     val category: String,
     val isFuel: Boolean,
     val liters: Double,
@@ -23,8 +24,8 @@ enum class SpendGrouping { MONTH, YEAR, KM }
  * Agrupamento de gastos. Em MONTH e YEAR, [start] e [end] são datas (milissegundos);
  * em KM, são a quilometragem inicial (inclusiva) e final (exclusiva) da faixa.
  */
-data class SpendBucket(val start: Long, val end: Long, val maintenance: Double, val fuel: Double) {
-    val total: Double get() = maintenance + fuel
+data class SpendBucket(val start: Long, val end: Long, val maintenance: Long, val fuel: Long) {
+    val total: Long get() = maintenance + fuel
 }
 
 /** Cálculos do painel financeiro (RF-08). Funções puras, sem dependência de interface ou banco. */
@@ -66,8 +67,8 @@ object SpendingAnalytics {
     fun previousRange(start: Long, end: Long): Pair<Long, Long> = (start - (end - start) - 1) to (start - 1)
 
     /** Variação percentual; null quando não há base de comparação. */
-    fun variation(current: Double, previous: Double): Double? =
-        if (previous > 0) (current - previous) / previous * 100 else null
+    fun variation(current: Long, previous: Long): Double? =
+        if (previous > 0) (current - previous).toDouble() / previous * 100 else null
 
     /** Km rodados: soma, por veículo, da diferença entre a maior e a menor quilometragem. */
     fun kmDriven(list: List<Expense>): Long =
@@ -76,23 +77,23 @@ object SpendingAnalytics {
     // Consumo (km/L) não faz parte do painel financeiro: é calculado só a pedido do usuário,
     // entre abastecimentos seguidos (domain/FuelConsumption, RF-05).
 
-    /** Preço médio do litro, considerando só abastecimentos com valor e litros informados. */
+    /** Preço médio do litro em reais, considerando só abastecimentos com valor e litros informados. */
     fun averageLiterPrice(list: List<Expense>): Double? {
-        val paid = list.filter { it.isFuel && it.amount > 0 && it.liters > 0 }
-        return if (paid.isEmpty()) null else paid.sumOf { it.amount } / paid.sumOf { it.liters }
+        val paid = list.filter { it.isFuel && it.amountCents > 0 && it.liters > 0 }
+        return if (paid.isEmpty()) null else paid.sumOf { it.amountCents } / 100.0 / paid.sumOf { it.liters }
     }
 
     /** Total por categoria, do maior para o menor, sem categorias zeradas. */
-    fun byCategory(list: List<Expense>): List<Pair<String, Double>> =
+    fun byCategory(list: List<Expense>): List<Pair<String, Long>> =
         list.groupBy { it.category }
-            .map { (k, v) -> k to v.sumOf { it.amount } }
+            .map { (k, v) -> k to v.sumOf { it.amountCents } }
             .filter { it.second > 0 }
             .sortedByDescending { it.second }
 
     private fun bucketOf(start: Long, end: Long, items: List<Expense>) = SpendBucket(
         start, end,
-        items.filter { !it.isFuel }.sumOf { it.amount },
-        items.filter { it.isFuel }.sumOf { it.amount }
+        items.filter { !it.isFuel }.sumOf { it.amountCents },
+        items.filter { it.isFuel }.sumOf { it.amountCents }
     )
 
     /** Agrupa os gastos por mês, por ano ou por faixa de quilometragem. */

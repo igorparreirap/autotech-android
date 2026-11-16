@@ -8,17 +8,26 @@ import com.autotech.android.data.local.entity.MaintenanceRecordEntity
 import com.autotech.android.domain.OdometerRules
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 
 class MaintenanceRepository(
     private val maintenanceDao: MaintenanceDao,
     private val vehicleDao: VehicleDao,
     private val cycleDao: MaintenanceCycleDao,
     private val pendingDao: com.autotech.android.data.local.dao.PendingMaintenanceDao,
+    private val receiptDao: com.autotech.android.data.local.dao.ReceiptDao,
     private val vehicleRepository: VehicleRepository
 ) {
 
     fun observeRecords(vehicleId: Long): Flow<List<MaintenanceRecordEntity>> =
         maintenanceDao.observeByVehicle(vehicleId)
+
+    /** RF-04: comprovantes de cada manutenção do veículo (id do registro -> caminhos, na ordem anexada). */
+    fun observeReceipts(vehicleId: Long): Flow<Map<Long, List<String>>> =
+        receiptDao.observeMaintenanceByVehicle(vehicleId).map { l -> l.groupBy({ it.maintenanceRecordId ?: 0L }, { it.path }) }
+
+    suspend fun listReceipts(vehicleId: Long): Map<Long, List<String>> =
+        receiptDao.listMaintenanceByVehicle(vehicleId).groupBy({ it.maintenanceRecordId ?: 0L }, { it.path })
 
     /**
      * [updateVehicleOdometerTo]: KM atual do veículo, quando o usuário o informou ou marcou que o KM do
@@ -26,7 +35,8 @@ class MaintenanceRepository(
      */
     suspend fun addRecord(
         record: MaintenanceRecordEntity,
-        updateVehicleOdometerTo: Long?
+        updateVehicleOdometerTo: Long?,
+        receipts: List<String> = emptyList()
     ): Result<Long> {
         val vehicle = vehicleDao.getById(record.vehicleId) ?: return Result.failure(IllegalStateException("Veículo não encontrado."))
         OdometerRules.validateAgainstOdometer(record.eventKm, vehicle.currentOdometerKm, updateVehicleOdometerTo).onFailure {
@@ -40,6 +50,11 @@ class MaintenanceRepository(
         OdometerRules.validateTimeline(record.eventDateMillis, record.eventKm, vehicleRepository.odometerEvents(record.vehicleId))
             .onFailure { return Result.failure(it) }
         val id = maintenanceDao.insert(record)
+        // RF-04: um registro na tabela receipts por arquivo anexado
+        if (receipts.isNotEmpty()) {
+            val now = System.currentTimeMillis()
+            receiptDao.insertAll(receipts.mapIndexed { i, p -> com.autotech.android.data.local.entity.ReceiptEntity(maintenanceRecordId = id, fuelRecordId = null, path = p, position = i, createdAtMillis = now) })
+        }
         // RF-06: registrar o serviço completa a pendência criada pelo "Já fiz" (se houver)
         pendingDao.deleteByItem(record.vehicleId, record.itemKey)
         if (updateVehicleOdometerTo != null) {

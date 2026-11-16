@@ -14,7 +14,6 @@ import androidx.compose.runtime.LaunchedEffect
 import com.autotech.android.ui.components.AtCheckRow
 import com.autotech.android.ui.components.ReceiptAttachments
 import com.autotech.android.ui.components.ReceiptOpenButton
-import com.autotech.android.domain.ReceiptPaths
 import com.autotech.android.util.PendingReceipt
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -75,6 +74,7 @@ import com.autotech.android.ui.components.formatKm
 import com.autotech.android.ui.components.formatMoney
 import com.autotech.android.ui.components.maintenanceIcon
 import com.autotech.android.ui.components.parseDecimal
+import com.autotech.android.ui.components.parseMoney
 import com.autotech.android.ui.theme.AtColors
 import com.autotech.android.util.ReceiptFileStore
 import kotlinx.coroutines.launch
@@ -120,8 +120,10 @@ fun MaintenanceListScreen(
     val app = context.applicationContext as AutoTechApplication
     val recordsFlow = remember(vehicleId) { app.graph.maintenanceRepository.observeRecords(vehicleId) }
     val vehicleFlow = remember(vehicleId) { app.graph.vehicleRepository.observeVehicle(vehicleId) }
+    val receiptsFlow = remember(vehicleId) { app.graph.maintenanceRepository.observeReceipts(vehicleId) }
     val records by recordsFlow.collectAsState(initial = emptyList())
     val vehicle by vehicleFlow.collectAsState(initial = null)
+    val receipts by receiptsFlow.collectAsState(initial = emptyMap())
     val df = remember { SimpleDateFormat("dd/MM/yyyy", PT_BR) }
     // RF-06: ciclos em andamento e itens marcados como "Já fiz"
     val cyclesFlow = remember(vehicleId) { app.graph.maintenanceRepository.observeCycles(vehicleId) }
@@ -147,7 +149,7 @@ fun MaintenanceListScreen(
         }
 
         Reveal(0) {
-            val total = records.sumOf { it.amount ?: 0.0 }
+            val total = records.sumOf { it.amountCents ?: 0L }
             DarkSummaryCard(
                 label = "Total investido",
                 value = formatMoney(total),
@@ -241,8 +243,8 @@ fun MaintenanceListScreen(
                         AtListRow(
                             title = MaintenanceCatalog.label(r.itemKey),
                             subtitle = "${df.format(Date(r.eventDateMillis))} · ${formatKm(r.eventKm)} km" +
-                                (r.laborAmount?.let { l ->
-                                    "\nPeças ${formatMoney(MaintenanceCost.parts(r.amount, l) ?: 0.0)} + mão de obra ${formatMoney(l)}"
+                                (r.laborCents?.let { l ->
+                                    "\nPeças ${formatMoney(MaintenanceCost.parts(r.amountCents, l) ?: 0L)} + mão de obra ${formatMoney(l)}"
                                 } ?: "") +
                                 (r.description?.let { "\n$it" } ?: ""),
                             // data, peças e mão de obra, observação do item e descrição do atendimento
@@ -250,9 +252,9 @@ fun MaintenanceListScreen(
                             icon = maintenanceIcon(r.itemKey),
                             trailing = {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    ReceiptOpenButton(r.receiptPath)
+                                    ReceiptOpenButton(receipts[r.id].orEmpty())
                                     Text(
-                                        r.amount?.let { formatMoney(it) } ?: "—",
+                                        r.amountCents?.let { formatMoney(it) } ?: "—",
                                         style = MaterialTheme.typography.titleSmall
                                     )
                                 }
@@ -392,10 +394,10 @@ fun AddMaintenanceScreen(
             "Feito no mesmo atendimento de ${MaintenanceCatalog.label(key)} em $day"
         // RF-04: um registro por item; a mão de obra e a descrição geral ficam no principal
         val entries = if (perItem)
-            detailKeys.map { ItemEntry(it, parseDecimal(itemValues[it].orEmpty()), itemNotes[it]) }
+            detailKeys.map { ItemEntry(it, parseMoney(itemValues[it].orEmpty()), itemNotes[it]) }
         else
-            listOf(ItemEntry(key, if (splitLabor) parseDecimal(partsValue) else parseDecimal(amount), null))
-        val labor = if (perItem || splitLabor) parseDecimal(laborValue) else null
+            listOf(ItemEntry(key, if (splitLabor) parseMoney(partsValue) else parseMoney(amount), null))
+        val labor = if (perItem || splitLabor) parseMoney(laborValue) else null
         val recs = MaintenanceSplit.records(entries, labor, description, note)
         val main = recs.first()
         val extras = if (perItem) recs.drop(1)
@@ -412,12 +414,12 @@ fun AddMaintenanceScreen(
                 registeredAtMillis = registeredDate,
                 eventKm = ek,
                 vehicleKmAtRecord = vk,
-                amount = main.amount,
-                laborAmount = main.labor,
-                description = main.description,
-                receiptPath = ReceiptPaths.join(saved.map { it.first })
+                amountCents = main.amount,
+                laborCents = main.labor,
+                description = main.description
             )
-            app.graph.maintenanceRepository.addRecord(record, updateVehicleOdometerTo = typedCurrent)
+            // RF-04: os comprovantes ficam no registro principal, um por linha da tabela receipts
+            app.graph.maintenanceRepository.addRecord(record, updateVehicleOdometerTo = typedCurrent, receipts = saved.map { it.first })
                 .onSuccess { maintId ->
                     val ik = intervalKm.toIntOrNull()
                     val im = IntervalUnits.toMonths(intervalMonths.toIntOrNull(), inYears)
@@ -436,7 +438,7 @@ fun AddMaintenanceScreen(
                     run {
                         for (extra in extras) {
                             val item = extra.key
-                            val sub = record.copy(id = 0, itemKey = item, amount = extra.amount, laborAmount = null, description = extra.description, receiptPath = null)
+                            val sub = record.copy(id = 0, itemKey = item, amountCents = extra.amount, laborCents = null, description = extra.description)
                             app.graph.maintenanceRepository.addRecord(sub, updateVehicleOdometerTo = typedCurrent)
                                 .onSuccess { subId ->
                                     val own = ownInterval[item]
@@ -639,9 +641,9 @@ fun AddMaintenanceScreen(
                         Text(
                             "Total: " + formatMoney(
                                 MaintenanceSplit.total(
-                                    detailKeys.map { ItemEntry(it, parseDecimal(itemValues[it].orEmpty()), null) },
-                                    parseDecimal(laborValue)
-                                ) ?: 0.0
+                                    detailKeys.map { ItemEntry(it, parseMoney(itemValues[it].orEmpty()), null) },
+                                    parseMoney(laborValue)
+                                ) ?: 0L
                             ),
                             style = MaterialTheme.typography.titleSmall
                         )
@@ -650,7 +652,7 @@ fun AddMaintenanceScreen(
                         splitLabor = on
                         if (on && partsValue.isBlank()) partsValue = amount
                         if (!on && amount.isBlank()) {
-                            MaintenanceCost.total(parseDecimal(partsValue), parseDecimal(laborValue))?.let { amount = String.format(PT_BR, "%.2f", it) }
+                            MaintenanceCost.total(parseMoney(partsValue), parseMoney(laborValue))?.let { amount = String.format(PT_BR, "%.2f", com.autotech.android.domain.Money.toReais(it)) }
                         }
                     }
                     if (splitLabor) {
@@ -669,7 +671,7 @@ fun AddMaintenanceScreen(
                             )
                         }
                         Text(
-                            "Total: " + formatMoney(MaintenanceCost.total(parseDecimal(partsValue), parseDecimal(laborValue)) ?: 0.0),
+                            "Total: " + formatMoney(MaintenanceCost.total(parseMoney(partsValue), parseMoney(laborValue)) ?: 0L),
                             style = MaterialTheme.typography.titleSmall
                         )
                     } else {

@@ -14,7 +14,8 @@ import java.io.File
 class VehicleRepository(
     private val vehicleDao: VehicleDao,
     private val maintenanceDao: MaintenanceDao,
-    private val fuelDao: FuelDao
+    private val fuelDao: FuelDao,
+    private val receiptDao: com.autotech.android.data.local.dao.ReceiptDao
 ) {
 
     fun observeVehicles(userId: Long): Flow<List<VehicleEntity>> = vehicleDao.observeByUser(userId)
@@ -33,8 +34,8 @@ class VehicleRepository(
      */
     suspend fun deleteVehicle(vehicleId: Long, deleteHistory: Boolean): Result<Unit> = runCatching {
         if (deleteHistory) {
-            val receipts = maintenanceDao.listByVehicle(vehicleId).flatMap { com.autotech.android.domain.ReceiptPaths.split(it.receiptPath) } +
-                fuelDao.listByVehicle(vehicleId).flatMap { com.autotech.android.domain.ReceiptPaths.split(it.receiptPath) }
+            // os arquivos saem do aparelho; as linhas de receipts saem em cascata com os registros
+            val receipts = (receiptDao.listMaintenanceByVehicle(vehicleId) + receiptDao.listFuelByVehicle(vehicleId)).map { it.path }
             vehicleDao.deleteById(vehicleId)
             receipts.forEach { runCatching { File(it).delete() } }
         } else {

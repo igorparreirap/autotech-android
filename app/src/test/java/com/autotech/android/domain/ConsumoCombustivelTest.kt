@@ -159,7 +159,7 @@ class ConsumoCombustivelTest {
     }
 
     @Test
-    fun `varios comprovantes ficam no mesmo campo e voltam na mesma ordem`() {
+    fun `formato antigo dos comprovantes e separado na mesma ordem para a migracao`() {
         val raw = ReceiptPaths.join(listOf("/a/bomba.jpg", "/a/painel.jpg", "/a/nota.pdf"))
         assertEquals(listOf("/a/bomba.jpg", "/a/painel.jpg", "/a/nota.pdf"), ReceiptPaths.split(raw))
         assertEquals(3, ReceiptPaths.count(raw))
